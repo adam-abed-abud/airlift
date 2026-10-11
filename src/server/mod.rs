@@ -1,39 +1,95 @@
 //! HTTP server assembly: router, shared state and the run loop.
 
+pub mod error;
+pub mod middleware;
+pub mod routes;
+pub mod state;
+
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
-use axum::{Json, Router, routing::get};
+use axum::http::HeaderValue;
+use axum::http::header;
+use axum::routing::{get, post};
+use axum::{Router, middleware as axum_mw};
 use tokio::net::TcpListener;
-use tracing::info;
+use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::trace::TraceLayer;
+use tracing::{info, warn};
+
+use crate::auth::Auth;
+pub use state::{AppState, Scheme};
+
+/// How long to wait for in-flight requests after Ctrl+C before giving up.
+/// Sessions live only in memory, so an aborted multi-GB download cannot be
+/// resumed by the old client anyway; there is no point in waiting for it.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
 
 /// Build the application router. Kept separate from `run` so tests can drive
 /// the router without opening a socket.
-pub fn router() -> Router {
-    Router::new().route("/api/status", get(status))
+pub fn router(state: AppState) -> Router {
+    let api = Router::new()
+        .route("/status", get(routes::status))
+        .route("/auth", post(routes::login))
+        .route("/logout", post(routes::logout))
+        .layer(axum_mw::from_fn_with_state(
+            state.clone(),
+            middleware::same_origin_only,
+        ))
+        // API responses are per-session and must never be cached or shared.
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store"),
+        ));
+
+    Router::new()
+        .nest("/api", api)
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
 }
 
-async fn status() -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "version": env!("CARGO_PKG_VERSION") }))
+pub fn state(auth: Auth) -> AppState {
+    AppState {
+        auth: Arc::new(auth),
+        scheme: Scheme::Http,
+    }
 }
 
 /// Serve until Ctrl+C. Returns once the listener has shut down.
-pub async fn run(addr: SocketAddr) -> anyhow::Result<()> {
+pub async fn run(addr: SocketAddr, state: AppState) -> anyhow::Result<()> {
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("failed to bind {addr}"))?;
     info!("listening on {}", listener.local_addr()?);
 
-    axum::serve(listener, router())
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("server error")?;
-    Ok(())
-}
+    // ConnectInfo gives handlers the peer address for per-client throttling.
+    let app = router(state).into_make_service_with_connect_info::<SocketAddr>();
+    let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+    // `IntoFuture` is only implemented for the serve builder, hence the
+    // explicit `async move` wrapper before spawning.
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async move {
+                let _ = stop_rx.await;
+            })
+            .await
+    });
 
-async fn shutdown_signal() {
-    // Ignoring the error is fine: if the signal handler can't be installed the
-    // user can still kill the process, and we'd rather serve than bail.
+    // Ignoring a failure to install the handler is deliberate: the user can
+    // still kill the process, and refusing to serve would be worse.
     let _ = tokio::signal::ctrl_c().await;
     info!("shutting down");
+    let _ = stop_tx.send(());
+
+    match tokio::time::timeout(SHUTDOWN_GRACE, server).await {
+        Ok(joined) => joined.context("server task panicked")?.context("server error")?,
+        Err(_) => warn!("in-flight transfers did not finish in time; exiting anyway"),
+    }
+    Ok(())
 }

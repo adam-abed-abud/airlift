@@ -17,7 +17,14 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# OS-backed CSPRNG for the PIN and session tokens.
+getrandom = "0.4"
+# Constant-time comparison so PIN checks do not leak timing information.
+subtle = "2"
+qrcode = { version = "0.14", default-features = false }
+tower-http = { version = "0.6", features = ["trace", "set-header"] }
 
 [profile.release]
 # Small, fast single binary is the point of shipping this in Rust.
