@@ -23,9 +23,14 @@ struct Fixture {
     #[allow(dead_code)]
     share_dir: TempDir,
     upload_dir: Option<TempDir>,
+    shutdown: tokio_util::sync::CancellationToken,
 }
 
 fn fixture(uploads: bool) -> Fixture {
+    fixture_with(uploads, false)
+}
+
+fn fixture_with(uploads: bool, once: bool) -> Fixture {
     let share_dir = tempfile::tempdir().unwrap();
     std::fs::write(
         share_dir.path().join("hello.txt"),
@@ -43,11 +48,14 @@ fn fixture(uploads: bool) -> Fixture {
 
     let share = Share::directories(&[share_dir.path().to_path_buf()], false).unwrap();
     let auth = Auth::new(Pin::from_digits(PIN).unwrap());
-    let app = server::router(server::state(auth, share, upload));
+    let state = server::state(auth, share, upload, once);
+    let shutdown = state.shutdown.clone();
+    let app = server::router(state);
     Fixture {
         app,
         share_dir,
         upload_dir,
+        shutdown,
     }
 }
 
@@ -406,4 +414,67 @@ async fn page_is_served_with_hardening_headers() {
         send(&f.app, get("/api/nope", None)).await.status(),
         StatusCode::NOT_FOUND
     );
+}
+
+#[tokio::test]
+async fn once_stops_only_after_a_complete_download() {
+    let f = fixture_with(true, true);
+    let cookie = login(&f.app).await;
+    let id = file_id(&f.app, &cookie, "clip.mp4").await;
+
+    // Watching a preview is not a transfer.
+    let res = send(
+        &f.app,
+        get(&format!("/api/files/{id}/preview"), Some(&cookie)),
+    )
+    .await;
+    body_bytes(res).await;
+    assert!(!f.shutdown.is_cancelled());
+
+    // A partial range that does not reach the end is not complete either.
+    let mut req = get(&format!("/api/files/{id}/download"), Some(&cookie));
+    req.headers_mut()
+        .insert(header::RANGE, "bytes=0-99".parse().unwrap());
+    body_bytes(send(&f.app, req).await).await;
+    assert!(!f.shutdown.is_cancelled());
+
+    // A download whose body is dropped before the end never completes.
+    let res = send(
+        &f.app,
+        get(&format!("/api/files/{id}/download"), Some(&cookie)),
+    )
+    .await;
+    drop(res);
+    assert!(!f.shutdown.is_cancelled());
+
+    // Reading the last range to EOF completes the transfer.
+    let mut req = get(&format!("/api/files/{id}/download"), Some(&cookie));
+    req.headers_mut()
+        .insert(header::RANGE, "bytes=100-".parse().unwrap());
+    body_bytes(send(&f.app, req).await).await;
+    assert!(f.shutdown.is_cancelled());
+}
+
+#[tokio::test]
+async fn once_stops_after_a_saved_upload() {
+    let f = fixture_with(true, true);
+    let cookie = login(&f.app).await;
+    body_bytes(send(&f.app, upload_request(&cookie, &[("a.txt", b"a")])).await).await;
+    assert!(f.shutdown.is_cancelled());
+}
+
+#[tokio::test]
+async fn without_once_nothing_stops() {
+    let f = fixture(false);
+    let cookie = login(&f.app).await;
+    let id = file_id(&f.app, &cookie, "hello.txt").await;
+    body_bytes(
+        send(
+            &f.app,
+            get(&format!("/api/files/{id}/download"), Some(&cookie)),
+        )
+        .await,
+    )
+    .await;
+    assert!(!f.shutdown.is_cancelled());
 }

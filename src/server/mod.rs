@@ -16,6 +16,7 @@ use axum::http::{HeaderValue, StatusCode, header};
 use axum::routing::{get, post};
 use axum::{Router, middleware as axum_mw};
 use tokio::net::TcpListener;
+use tokio_util::sync::CancellationToken;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
@@ -87,22 +88,30 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-pub fn state(auth: Auth, share: Share, upload: Option<UploadConfig>) -> AppState {
+pub fn state(auth: Auth, share: Share, upload: Option<UploadConfig>, once: bool) -> AppState {
     AppState {
         auth: Arc::new(auth),
         share: Arc::new(share),
         upload: upload.map(Arc::new),
         scheme: Scheme::Http,
+        shutdown: CancellationToken::new(),
+        once,
     }
 }
 
-/// Serve until Ctrl+C. Returns once the listener has shut down.
-pub async fn run(addr: SocketAddr, state: AppState) -> anyhow::Result<()> {
+/// Serve until Ctrl+C, the optional timeout, or a `--once` completion.
+/// Returns once the listener has shut down.
+pub async fn run(
+    addr: SocketAddr,
+    state: AppState,
+    timeout: Option<Duration>,
+) -> anyhow::Result<()> {
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("failed to bind {addr}"))?;
     info!("listening on {}", listener.local_addr()?);
 
+    let shutdown: CancellationToken = state.shutdown.clone();
     // ConnectInfo gives handlers the peer address for per-client throttling.
     let app = router(state).into_make_service_with_connect_info::<SocketAddr>();
     let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
@@ -116,10 +125,20 @@ pub async fn run(addr: SocketAddr, state: AppState) -> anyhow::Result<()> {
             .await
     });
 
-    // Ignoring a failure to install the handler is deliberate: the user can
-    // still kill the process, and refusing to serve would be worse.
-    let _ = tokio::signal::ctrl_c().await;
-    info!("shutting down");
+    // A `None` timeout must never fire, hence the pending future.
+    let deadline = async move {
+        match timeout {
+            Some(t) => tokio::time::sleep(t).await,
+            None => std::future::pending::<()>().await,
+        }
+    };
+    tokio::select! {
+        // Ignoring a failure to install the handler is deliberate: the user
+        // can still kill the process, and refusing to serve would be worse.
+        _ = tokio::signal::ctrl_c() => info!("shutting down"),
+        _ = deadline => info!("timeout reached; shutting down"),
+        _ = shutdown.cancelled() => {}
+    }
     let _ = stop_tx.send(());
 
     match tokio::time::timeout(SHUTDOWN_GRACE, server).await {

@@ -34,6 +34,8 @@ All options work with both commands unless noted.
 | `--upload-dir <DIR>` | first shared dir (`serve`), current dir (`send`) | Where uploads are written. Requires `--allow-upload`. |
 | `--max-upload <SIZE>` | `10G` | Cap on one upload request (all files in it together). Accepts `500M`, `1.5G`, `2T`, plain bytes. |
 | `--include-hidden` | off | `serve` only: list dot-files too. |
+| `--once` | off | Exit after the first completed transfer: a download that reached the end of the file, or an upload request that saved at least one file. Previews do not count. |
+| `--timeout <DURATION>` | none | Exit after this long, e.g. `30m`, `2h`, `1h30m`. |
 | `-v`, `-vv` | | Debug / trace logging. `RUST_LOG` is honoured when no `-v` is given. |
 
 ## What the terminal shows
@@ -93,3 +95,9 @@ Sessions expire after 2 hours of inactivity and after 12 hours regardless.
 Ctrl+C stops accepting connections, waits up to three seconds for
 in-flight transfers, then exits. A download interrupted this way cannot be
 resumed afterwards because all sessions are gone with the process.
+
+`--once` and `--timeout` stop the server the same way without you being
+there. `--once` is the natural companion of `send`: start it, walk over to
+the iPad, tap Download, and the terminal is free again when the file has
+fully arrived. A download that the client abandons part-way does not
+count, so a flaky connection cannot end the share early.

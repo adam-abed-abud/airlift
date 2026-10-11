@@ -6,6 +6,7 @@
 
 use std::net::IpAddr;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
 
@@ -32,6 +33,9 @@ pub enum Command {
 
         #[command(flatten)]
         upload: UploadOptions,
+
+        #[command(flatten)]
+        lifetime: LifetimeOptions,
     },
 
     /// Share one or more directories for browsing and download.
@@ -50,7 +54,24 @@ pub enum Command {
 
         #[command(flatten)]
         upload: UploadOptions,
+
+        #[command(flatten)]
+        lifetime: LifetimeOptions,
     },
+}
+
+/// When to stop without being told. Both exist so a share cannot be left
+/// running by accident after the one transfer it was started for.
+#[derive(Args, Debug, Clone, Default)]
+pub struct LifetimeOptions {
+    /// Exit after the first completed transfer (a full download, or an
+    /// upload request that saved at least one file).
+    #[arg(long)]
+    pub once: bool,
+
+    /// Exit after this long, e.g. `30m`, `2h`, `1h30m`.
+    #[arg(long, value_name = "DURATION", value_parser = humantime::parse_duration)]
+    pub timeout: Option<Duration>,
 }
 
 /// Options that control where the server listens and which URL is advertised.
@@ -100,6 +121,12 @@ impl Command {
     pub fn upload(&self) -> &UploadOptions {
         match self {
             Command::Send { upload, .. } | Command::Serve { upload, .. } => upload,
+        }
+    }
+
+    pub fn lifetime(&self) -> &LifetimeOptions {
+        match self {
+            Command::Send { lifetime, .. } | Command::Serve { lifetime, .. } => lifetime,
         }
     }
 }

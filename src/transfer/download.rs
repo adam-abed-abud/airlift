@@ -27,11 +27,17 @@ pub enum Disposition {
     Inline,
 }
 
+/// Invoked once the final byte of a file has been handed to the client.
+/// "Final" means the response reached the end of the file, so a client that
+/// fetches in several ranges triggers it on the last one only.
+pub type OnComplete = Box<dyn FnOnce() + Send + 'static>;
+
 /// Build a streaming response for `file`, honouring `Range`/`If-Range`.
 pub async fn stream_file(
     file: &ResolvedFile,
     request_headers: &HeaderMap,
     disposition: Disposition,
+    on_complete: Option<OnComplete>,
 ) -> Result<Response, ApiError> {
     let mut handle = tokio::fs::File::open(&file.path).await.map_err(|e| {
         tracing::warn!(path = %file.path.display(), error = %e, "cannot open file");
@@ -95,7 +101,67 @@ pub async fn stream_file(
     // `take` caps the stream at the requested length so a file growing while
     // it is read cannot push more bytes than Content-Length promised.
     let stream = ReaderStream::with_capacity(handle.take(len), CHUNK_SIZE);
+    let reaches_eof = start + len == size;
+    let stream = CompletionStream {
+        inner: stream,
+        remaining: len,
+        on_complete: on_complete.filter(|_| reaches_eof),
+    };
     Ok((status, headers, Body::from_stream(stream)).into_response())
+}
+
+/// Wraps the byte stream to notice when every promised byte went out.
+///
+/// The callback fires from `Drop` once `remaining` is zero rather than on
+/// the stream's `None`: hyper knows the Content-Length and stops polling as
+/// soon as that many bytes are out, so the end of the stream is often never
+/// observed. Dropping early with bytes left (client went away) does not
+/// fire, which is exactly the distinction `--once` needs.
+struct CompletionStream<S> {
+    inner: S,
+    remaining: u64,
+    on_complete: Option<OnComplete>,
+}
+
+impl<S> futures_core::Stream for CompletionStream<S>
+where
+    S: futures_core::Stream<Item = std::io::Result<bytes::Bytes>> + Unpin,
+{
+    type Item = std::io::Result<bytes::Bytes>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        use std::task::Poll;
+        match std::pin::Pin::new(&mut self.inner).poll_next(cx) {
+            Poll::Ready(Some(Ok(chunk))) => {
+                self.remaining = self.remaining.saturating_sub(chunk.len() as u64);
+                Poll::Ready(Some(Ok(chunk)))
+            }
+            Poll::Ready(None) => {
+                self.fire_if_complete();
+                Poll::Ready(None)
+            }
+            other => other,
+        }
+    }
+}
+
+impl<S> CompletionStream<S> {
+    fn fire_if_complete(&mut self) {
+        if self.remaining == 0 {
+            if let Some(done) = self.on_complete.take() {
+                done();
+            }
+        }
+    }
+}
+
+impl<S> Drop for CompletionStream<S> {
+    fn drop(&mut self) {
+        self.fire_if_complete();
+    }
 }
 
 /// Weak-ish but adequate validator: size plus mtime. Good enough to detect

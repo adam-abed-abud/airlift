@@ -42,13 +42,20 @@ async fn main() -> anyhow::Result<()> {
     if let Some(qr) = utils::qr::render(&url) {
         println!("{qr}");
     }
+    let lifetime = cli.command.lifetime();
+    if lifetime.once {
+        println!("Stops after the first completed transfer (--once)");
+    }
+    if let Some(t) = lifetime.timeout {
+        println!(
+            "Stops automatically after {}",
+            humantime::format_duration(t)
+        );
+    }
     println!("Press Ctrl+C to stop");
 
-    server::run(
-        SocketAddr::new(net.bind, net.port),
-        server::state(auth, share, upload),
-    )
-    .await
+    let state = server::state(auth, share, upload, lifetime.once);
+    server::run(SocketAddr::new(net.bind, net.port), state, lifetime.timeout).await
 }
 
 /// Turn the upload flags into a config, picking a sensible default

@@ -37,6 +37,8 @@ lanshare send movie.mp4                      # share one file
 lanshare serve ~/Videos                      # share a folder (recursively)
 lanshare serve ~/Videos ~/Pictures           # several folders
 lanshare serve ~/Downloads --allow-upload    # also accept files from the device
+lanshare send movie.mp4 --once               # exit after the download completes
+lanshare serve ~/Videos --timeout 30m        # exit after 30 minutes
 lanshare send report.pdf --port 9000         # different port
 ```
 

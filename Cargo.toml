@@ -27,6 +27,10 @@ tower-http = { version = "0.6", features = ["trace", "set-header"] }
 walkdir = "2"
 mime_guess = "2"
 tokio-util = { version = "0.7", features = ["io"] }
+# Human-friendly durations for --timeout (30m, 1h30m).
+humantime = "2"
+futures-core = "0.3"
+bytes = "1"
 percent-encoding = "2"
 httpdate = "1"
 # Frontend files are compiled into the binary in release builds and read

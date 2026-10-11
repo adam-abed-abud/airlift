@@ -45,19 +45,18 @@ e.g. `RUST_LOG=lanshare=debug`. Access codes are printed, never logged.
 ## Roadmap
 
 Implemented (v0.1): everything under "Essential MVP" in
-`lanshare_project_notes.md`.
+`lanshare_project_notes.md`, plus `--once` and `--timeout`.
 
 Planned, roughly in order:
 
-1. `--once` (exit after the first completed download) and `--timeout 30m`.
-2. Multi-select with streamed ZIP (store-only for already compressed media).
-3. HTTPS with a workable trust story (see security.md), which also unlocks
+1. Multi-select with streamed ZIP (store-only for already compressed media).
+2. HTTPS with a workable trust story (see security.md), which also unlocks
    the Share-to-Photos path on iOS.
-4. Resumable/chunked uploads with SHA-256 verification.
-5. Push mode: CLI announces a new file to an open page.
-6. Clipboard/text snippets.
-7. Connected-device view and optional per-device approval.
-8. Release builds for macOS, Windows and Raspberry Pi.
+3. Resumable/chunked uploads with SHA-256 verification.
+4. Push mode: CLI announces a new file to an open page.
+5. Clipboard/text snippets.
+6. Connected-device view and optional per-device approval.
+7. Release builds for macOS, Windows and Raspberry Pi.
 
 ## Conventions
 

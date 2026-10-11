@@ -100,17 +100,25 @@ nested API 404s behave.
 
 ## Shutdown
 
-Ctrl+C triggers Axum's graceful shutdown (stop accepting, let in-flight
-requests finish) bounded by a 3-second timeout, after which the process
-exits regardless. Since sessions are gone with the process, an interrupted
-download could not be resumed anyway.
+Three things end the run: Ctrl+C, the `--timeout` deadline, or a
+`--once` completion, which cancels a `CancellationToken` held in
+`AppState`. All three trigger Axum's graceful shutdown (stop accepting,
+let in-flight requests finish) bounded by a 3-second timeout, after which
+the process exits regardless. Since sessions are gone with the process, an
+interrupted download could not be resumed anyway.
+
+**Detecting a completed download.** The download body is wrapped in
+`CompletionStream`, which counts bytes out and fires a callback from
+`Drop` once the promised length has been produced and the range reached
+the end of the file. It has to be `Drop` rather than the stream's end:
+hyper knows the Content-Length and stops polling the body as soon as that
+many bytes are written, so the final `None` is usually never observed. A
+body dropped with bytes remaining (client gave up) never fires.
 
 ## Extension points
 
 - `Scheme::Https` is plumbed through state, cookie flags and origin
   checks; adding TLS means a listener change in `server::run` and a
   certificate strategy (see security.md).
-- `Share` could grow a `--once` / `--timeout` policy by wrapping
-  `server::run` with a cancellation trigger.
 - ZIP-of-selection, resumable uploads and push notifications belong in
   `transfer/` and `routes.rs` without touching auth.

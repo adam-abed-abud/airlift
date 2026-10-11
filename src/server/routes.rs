@@ -142,7 +142,13 @@ pub async fn download(
         .resolve(&id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "no such file"))?;
     info!(name = %file.name, "download");
-    stream_file(&file, &headers, Disposition::Attachment).await
+    let done = state.clone();
+    let name = file.name.clone();
+    let on_complete = Box::new(move || {
+        info!(name = %name, "download complete");
+        done.transfer_completed("download");
+    });
+    stream_file(&file, &headers, Disposition::Attachment, Some(on_complete)).await
 }
 
 pub async fn preview(
@@ -160,7 +166,8 @@ pub async fn preview(
             "no preview for this type",
         ));
     }
-    stream_file(&file, &headers, Disposition::Inline).await
+    // Previews never count as a transfer: watching is not receiving.
+    stream_file(&file, &headers, Disposition::Inline, None).await
 }
 
 #[derive(Serialize)]
@@ -233,6 +240,9 @@ pub async fn upload(
                 }
             }
         }
+    }
+    if !outcome.saved.is_empty() {
+        state.transfer_completed("upload");
     }
     Ok(Json(outcome))
 }
