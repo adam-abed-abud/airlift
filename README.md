@@ -28,11 +28,19 @@ Press Ctrl+C to stop
 
 ## Install
 
+With Cargo (needs a Rust toolchain, 1.85 or newer):
+
 ```bash
 cargo install --path .        # or: cargo build --release && cp target/release/lanshare ~/.local/bin/
 ```
 
-Requires a Rust toolchain (1.85 or newer).
+With Nix (flakes), which also brings ImageMagick and ffmpeg for HEIC and
+video thumbnails:
+
+```bash
+nix run .# -- send movie.mp4           # run without installing
+nix profile install .#                 # install into your profile
+```
 
 ## Use
 

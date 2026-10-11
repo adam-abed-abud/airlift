@@ -22,6 +22,33 @@ Type-check the frontend (optional, needs a TypeScript install):
 npx tsc --noEmit --allowJs --checkJs --target es2020 --lib dom,es2020 web/app.js
 ```
 
+## Nix
+
+`flake.nix` exposes:
+
+- `packages.default` (also `lanshare`): the binary, wrapped so ImageMagick
+  and `ffmpeg` from nixpkgs are on its `PATH`. HEIC and video thumbnails
+  therefore work out of the box.
+- `packages.lanshare-minimal`: the same binary without the wrapper, for a
+  small closure; thumbnails for HEIC and video then depend on what the
+  system has.
+- `apps.default`: `nix run .# -- serve ~/Videos`.
+- `devShells.default`: cargo, rustc, clippy, rustfmt, rust-analyzer and
+  the two tools, for `nix develop`.
+- `overlays.default`: adds `pkgs.lanshare` for use in a NixOS or
+  home-manager configuration.
+
+The derivation lives in `nix/package.nix` and uses `cargoLock.lockFile`,
+so dependency hashes come from `Cargo.lock` and nothing needs updating
+after `cargo update`. The build runs the test suite in the sandbox.
+
+To use it from another flake:
+
+```nix
+inputs.lanshare.url = "github:<you>/lanshare";
+# then: inputs.lanshare.packages.${system}.default
+```
+
 ## Manual smoke test
 
 ```bash
