@@ -11,7 +11,7 @@
 //    Photo Library / Files / Camera.
 
 /** @typedef {{id: string, name: string, path: string, root: string, size: number, modified: number|null, mime: string, previewable: boolean, thumbnail: boolean}} FileEntry */
-/** @typedef {{version: string, authenticated: boolean, share_name: string, upload_enabled?: boolean, max_upload_bytes?: number}} Status */
+/** @typedef {{version: string, authenticated: boolean, share_name: string, upload_enabled?: boolean, max_upload_bytes?: number, host_name?: string}} Status */
 
 /** Files above this size are not offered via the Share sheet, because the
  *  Web Share API needs the whole file in memory first. */
@@ -61,7 +61,7 @@ async function api(path, init = {}) {
 function showLogin(message) {
   views.files.hidden = true;
   views.login.hidden = false;
-  $("logout").hidden = true;
+  $("topbar").hidden = true;
   const err = $("login-error");
   err.hidden = !message;
   err.textContent = message || "";
@@ -73,7 +73,7 @@ function showLogin(message) {
 function showFiles() {
   views.login.hidden = true;
   views.files.hidden = false;
-  $("logout").hidden = false;
+  $("topbar").hidden = false;
   $("upload-panel").hidden = !(status && status.upload_enabled);
   loadFiles();
 }
@@ -87,8 +87,11 @@ async function init() {
     return;
   }
   if (status) {
-    $("share-name").textContent = status.share_name || "LANShare";
-    document.title = `${status.share_name || "LANShare"} – LANShare`;
+    const name = status.share_name || "LANShare";
+    $("share-name").textContent = name;
+    $("splash-name").textContent = name;
+    $("splash-host").textContent = status.host_name ? `shared from ${status.host_name}` : "";
+    document.title = `${name} – LANShare`;
   }
   if (status && status.authenticated) showFiles();
   else showLogin();
@@ -181,7 +184,10 @@ function fillThumb(box, file) {
   img.decoding = "async";
   img.alt = "";
   img.src = thumbUrl(file, "small");
-  img.addEventListener("error", badge);
+  img.addEventListener("error", () => {
+    badge();
+    box.closest(".cell")?.classList.remove("has-thumb");
+  });
   box.textContent = "";
   box.appendChild(img);
 }
@@ -214,6 +220,9 @@ function remember(v) {
 async function loadFiles() {
   const error = $("files-error");
   error.hidden = true;
+  // Only show the spinner on first load; a refresh keeps the old list in
+  // place so the page does not flash.
+  $("loading").hidden = files.length > 0;
   try {
     const res = await api("/api/files");
     const body = await res.json();
@@ -223,6 +232,8 @@ async function loadFiles() {
     if (e instanceof Error && e.message === "session expired") return;
     error.textContent = e instanceof Error ? e.message : "Could not load files";
     error.hidden = false;
+  } finally {
+    $("loading").hidden = true;
   }
 }
 
@@ -278,6 +289,7 @@ function renderFiles(truncated) {
 
     const cell = /** @type {HTMLElement} */ (cellTemplate.content.firstElementChild?.cloneNode(true));
     fillThumb(/** @type {HTMLElement} */ (cell.querySelector(".cell-thumb")), file);
+    cell.classList.toggle("has-thumb", file.thumbnail);
     /** @type {HTMLElement} */ (cell.querySelector(".cell-name")).textContent = file.name;
     cell.querySelector(".cell-button")?.addEventListener("click", () => {
       if (file.previewable) openPreview(file);

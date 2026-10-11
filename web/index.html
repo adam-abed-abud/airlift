@@ -10,23 +10,30 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="topbar">
+  <header id="topbar" class="topbar" hidden>
     <h1 id="share-name">LANShare</h1>
-    <button id="logout" class="btn btn-quiet" hidden>Log out</button>
+    <button id="logout" class="btn btn-quiet">Log out</button>
   </header>
 
   <main>
-    <!-- Login: shown until /api/status reports an authenticated session. -->
-    <section id="view-login" hidden>
-      <form id="login-form" class="card" autocomplete="off">
+    <!-- Login: shown until /api/status reports an authenticated session.
+         It doubles as a splash so the first screen says what this is and
+         which computer's terminal to look at. -->
+    <section id="view-login" class="splash" hidden>
+      <div class="splash-mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="56" height="56"><rect width="64" height="64" rx="14" fill="var(--accent)"/><path d="M32 12v26M20 28l12 12 12-12M16 50h32" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h2 id="splash-name" class="splash-name">LANShare</h2>
+      <p id="splash-host" class="hint"></p>
+      <form id="login-form" class="login-form" autocomplete="off">
         <label for="code">Access code</label>
-        <p class="hint">Shown in the terminal on the computer that is sharing.</p>
         <!-- inputmode=numeric brings up the number pad on iOS; one-time-code
              keeps Safari from offering saved passwords. -->
         <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code"
                placeholder="482-913" required autofocus>
-        <button type="submit" class="btn btn-primary">Unlock</button>
+        <button type="submit" class="btn btn-primary btn-wide">Unlock</button>
         <p id="login-error" class="error" role="alert" hidden></p>
+        <p class="hint">The code is on the screen of that computer.</p>
       </form>
     </section>
 
@@ -52,16 +59,27 @@
         <p id="file-count" class="hint"></p>
         <div class="toolbar-actions">
           <div class="segmented" role="group" aria-label="View">
-            <button id="view-list" class="btn btn-quiet" aria-pressed="true">List</button>
-            <button id="view-grid" class="btn btn-quiet" aria-pressed="false">Grid</button>
+            <button id="view-list" class="btn btn-quiet" aria-pressed="true" title="List">List</button>
+            <button id="view-grid" class="btn btn-quiet" aria-pressed="false" title="Grid">Grid</button>
           </div>
-          <button id="refresh" class="btn btn-quiet">Refresh</button>
+          <button id="refresh" class="btn btn-quiet" title="Refresh">↻</button>
         </div>
       </div>
+
       <p id="files-error" class="error" role="alert" hidden></p>
+
+      <div id="loading" class="state" hidden>
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="hint">Loading…</p>
+      </div>
+      <div id="empty" class="state" hidden>
+        <svg class="state-icon" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true"><path d="M8 14a4 4 0 0 1 4-4h8l4 4h12a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>
+        <p>Nothing shared yet.</p>
+        <p class="hint">Files added on the computer show up after a refresh.</p>
+      </div>
+
       <ul id="file-list" class="file-list"></ul>
       <ul id="file-grid" class="file-grid" hidden></ul>
-      <p id="empty" class="hint" hidden>Nothing shared yet.</p>
     </section>
   </main>
 
@@ -71,7 +89,7 @@
     <div class="overlay-bar">
       <span id="preview-name" class="overlay-title"></span>
       <a id="preview-download" class="btn btn-primary" download>Download</a>
-      <button id="preview-close" class="btn btn-quiet">Close</button>
+      <button id="preview-close" class="btn btn-quiet" aria-label="Close">✕</button>
     </div>
     <div id="preview-body" class="overlay-body"></div>
   </div>
@@ -81,7 +99,7 @@
       <div class="file-thumb"></div>
       <div class="file-main">
         <div class="file-name"></div>
-        <div class="file-meta hint"></div>
+        <div class="file-meta"></div>
       </div>
       <div class="file-actions">
         <button class="btn btn-quiet act-preview" hidden>Preview</button>
@@ -92,7 +110,8 @@
   </template>
 
   <!-- Grid cells: tap opens the preview (which has Download), or downloads
-       directly for files that cannot be previewed. -->
+       directly for files that cannot be previewed. Images show only their
+       thumbnail; the name is in the preview. -->
   <template id="grid-item">
     <li class="cell">
       <button class="cell-button">
