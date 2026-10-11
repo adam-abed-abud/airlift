@@ -11,8 +11,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use axum::http::HeaderValue;
-use axum::http::header;
+use axum::http::{HeaderValue, StatusCode, header};
+use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, post};
 use axum::{Router, middleware as axum_mw};
 use tokio::net::TcpListener;
@@ -22,6 +22,7 @@ use tracing::{info, warn};
 
 use crate::auth::Auth;
 use crate::files::Share;
+use crate::transfer::upload::UploadConfig;
 pub use state::{AppState, Scheme};
 
 /// How long to wait for in-flight requests after Ctrl+C before giving up.
@@ -35,11 +36,20 @@ pub fn router(state: AppState) -> Router {
     // Everything that touches files sits behind the session check. The
     // `route_layer` form means unknown paths still 404 instead of 401, which
     // keeps the API from being a probe for valid routes.
-    let protected = Router::new()
+    let mut protected = Router::new()
         .route("/files", get(routes::list_files))
         .route("/files/{id}/download", get(routes::download))
-        .route("/files/{id}/preview", get(routes::preview))
-        .route_layer(axum_mw::from_fn_with_state(
+        .route("/files/{id}/preview", get(routes::preview));
+    if let Some(upload) = &state.upload {
+        // The body limit is per request; a multi-file upload shares it.
+        // Mounted only when enabled so a read-only share has no write path
+        // at all, not even a disabled one.
+        protected = protected.route(
+            "/upload",
+            post(routes::upload).layer(DefaultBodyLimit::max(upload.max_bytes as usize)),
+        );
+    }
+    let protected = protected.route_layer(axum_mw::from_fn_with_state(
             state.clone(),
             middleware::require_session,
         ));
@@ -49,6 +59,9 @@ pub fn router(state: AppState) -> Router {
         .route("/auth", post(routes::login))
         .route("/logout", post(routes::logout))
         .merge(protected)
+        // Without this an unknown /api path falls through to the asset
+        // catch-all and answers 405 instead of a plain 404.
+        .fallback(|| async { StatusCode::NOT_FOUND })
         .layer(axum_mw::from_fn_with_state(
             state.clone(),
             middleware::same_origin_only,
@@ -71,10 +84,11 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-pub fn state(auth: Auth, share: Share) -> AppState {
+pub fn state(auth: Auth, share: Share, upload: Option<UploadConfig>) -> AppState {
     AppState {
         auth: Arc::new(auth),
         share: Arc::new(share),
+        upload: upload.map(Arc::new),
         scheme: Scheme::Http,
     }
 }

@@ -29,6 +29,9 @@ pub enum Command {
 
         #[command(flatten)]
         net: NetOptions,
+
+        #[command(flatten)]
+        upload: UploadOptions,
     },
 
     /// Share one or more directories for browsing and download.
@@ -44,6 +47,9 @@ pub enum Command {
 
         #[command(flatten)]
         net: NetOptions,
+
+        #[command(flatten)]
+        upload: UploadOptions,
     },
 }
 
@@ -66,10 +72,75 @@ pub struct NetOptions {
     pub host: Option<String>,
 }
 
+/// Uploads are off unless asked for: a share is read-only by default so
+/// that handing out the code never silently grants write access.
+#[derive(Args, Debug, Clone)]
+pub struct UploadOptions {
+    /// Let connected devices upload files to this computer.
+    #[arg(long)]
+    pub allow_upload: bool,
+
+    /// Where uploads are written. Defaults to the first shared directory
+    /// for `serve`, and to the current directory for `send`.
+    #[arg(long, value_name = "DIR", requires = "allow_upload")]
+    pub upload_dir: Option<PathBuf>,
+
+    /// Maximum size of one upload request, e.g. `500M` or `10G`.
+    #[arg(long, value_name = "SIZE", default_value = "10G", value_parser = parse_size)]
+    pub max_upload: u64,
+}
+
 impl Command {
     pub fn net(&self) -> &NetOptions {
         match self {
             Command::Send { net, .. } | Command::Serve { net, .. } => net,
         }
+    }
+
+    pub fn upload(&self) -> &UploadOptions {
+        match self {
+            Command::Send { upload, .. } | Command::Serve { upload, .. } => upload,
+        }
+    }
+}
+
+/// Parse `123`, `500M`, `10G`, `1.5G` (binary units, as disks are shown).
+pub fn parse_size(input: &str) -> Result<u64, String> {
+    let s = input.trim();
+    let split = s
+        .find(|c: char| !c.is_ascii_digit() && c != '.')
+        .unwrap_or(s.len());
+    let (number, unit) = s.split_at(split);
+    let value: f64 = number
+        .parse()
+        .map_err(|_| format!("invalid size `{input}`"))?;
+    let multiplier: f64 = match unit.trim().to_ascii_uppercase().as_str() {
+        "" | "B" => 1.0,
+        "K" | "KB" | "KIB" => 1024.0,
+        "M" | "MB" | "MIB" => 1024.0 * 1024.0,
+        "G" | "GB" | "GIB" => 1024.0 * 1024.0 * 1024.0,
+        "T" | "TB" | "TIB" => 1024.0 * 1024.0 * 1024.0 * 1024.0,
+        other => return Err(format!("unknown size unit `{other}`")),
+    };
+    let bytes = value * multiplier;
+    if bytes < 1.0 || !bytes.is_finite() {
+        return Err(format!("size `{input}` must be at least 1 byte"));
+    }
+    Ok(bytes as u64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sizes() {
+        assert_eq!(parse_size("123").unwrap(), 123);
+        assert_eq!(parse_size("1K").unwrap(), 1024);
+        assert_eq!(parse_size("500M").unwrap(), 500 * 1024 * 1024);
+        assert_eq!(parse_size("1.5g").unwrap(), 3 * 512 * 1024 * 1024);
+        assert!(parse_size("0").is_err());
+        assert!(parse_size("abc").is_err());
+        assert!(parse_size("10X").is_err());
     }
 }

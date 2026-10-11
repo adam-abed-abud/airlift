@@ -2,7 +2,7 @@
 //! auth/files/transfer modules and shape the response.
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Multipart, Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,7 @@ use super::state::{AppState, Scheme};
 use crate::auth::{COOKIE_NAME, LoginError, session::MAX_LIFETIME};
 use crate::files::FileEntry;
 use crate::transfer::download::{Disposition, stream_file};
+use crate::transfer::upload::{Saved, UploadError};
 
 #[derive(Serialize)]
 pub struct Status {
@@ -21,6 +22,9 @@ pub struct Status {
     authenticated: bool,
     /// Shown as the page title before login; a folder name is not a secret.
     share_name: String,
+    upload_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_upload_bytes: Option<u64>,
 }
 
 /// Public: lets the page decide whether to show the login form. Nothing here
@@ -33,6 +37,8 @@ pub async fn status(State(state): State<AppState>, headers: HeaderMap) -> Json<S
         version: env!("CARGO_PKG_VERSION"),
         authenticated,
         share_name: state.share.display_name(),
+        upload_enabled: state.upload.is_some(),
+        max_upload_bytes: state.upload.as_ref().map(|u| u.max_bytes),
     })
 }
 
@@ -144,4 +150,82 @@ pub async fn preview(
         return Err(ApiError::new(StatusCode::UNSUPPORTED_MEDIA_TYPE, "no preview for this type"));
     }
     stream_file(&file, &headers, Disposition::Inline).await
+}
+
+#[derive(Serialize)]
+pub struct UploadOutcome {
+    saved: Vec<Saved>,
+    failed: Vec<UploadFailure>,
+}
+
+#[derive(Serialize)]
+pub struct UploadFailure {
+    name: String,
+    error: String,
+}
+
+/// Accept one or more files in a multipart body. Each file is committed
+/// independently so one bad file does not lose the others in the batch.
+pub async fn upload(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Json<UploadOutcome>, ApiError> {
+    let config = state
+        .upload
+        .as_ref()
+        .ok_or_else(|| ApiError::new(StatusCode::FORBIDDEN, "uploads are disabled"))?;
+
+    let declared = headers
+        .get(header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok());
+    config.check_space(declared).map_err(upload_error)?;
+
+    let mut outcome = UploadOutcome { saved: Vec::new(), failed: Vec::new() };
+    loop {
+        let field = match multipart.next_field().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(e) => {
+                // The body limit layer surfaces here as a multipart error once
+                // the stream is cut off; report what we did manage to save.
+                warn!(error = %e.body_text(), "multipart read failed");
+                if outcome.saved.is_empty() {
+                    return Err(ApiError::new(e.status(), e.body_text()));
+                }
+                outcome.failed.push(UploadFailure {
+                    name: "(remaining files)".into(),
+                    error: e.body_text(),
+                });
+                break;
+            }
+        };
+        if field.file_name().is_none() {
+            continue; // Not a file part; nothing else is expected, skip it.
+        }
+        let name = field.file_name().unwrap_or("upload").to_string();
+        match config.save_field(field).await {
+            Ok(saved) => outcome.saved.push(saved),
+            Err(e) => {
+                warn!(name = %name, error = %e, "upload failed");
+                outcome.failed.push(UploadFailure { name, error: e.to_string() });
+                // Disk-level failures will not get better for the next file.
+                if matches!(e, UploadError::DiskFull | UploadError::TooLarge) {
+                    break;
+                }
+            }
+        }
+    }
+    Ok(Json(outcome))
+}
+
+fn upload_error(e: UploadError) -> ApiError {
+    let status = match e {
+        UploadError::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+        UploadError::DiskFull => StatusCode::INSUFFICIENT_STORAGE,
+        UploadError::Read(_) => StatusCode::BAD_REQUEST,
+        UploadError::Write(_) | UploadError::Collision => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    ApiError::new(status, e.to_string())
 }

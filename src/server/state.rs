@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::auth::Auth;
 use crate::files::Share;
+use crate::transfer::upload::UploadConfig;
 
 /// Scheme the server is reachable on. Only HTTP exists today, but cookie
 /// flags and origin checks already branch on this so an HTTPS mode can be
@@ -26,5 +27,7 @@ impl Scheme {
 pub struct AppState {
     pub auth: Arc<Auth>,
     pub share: Arc<Share>,
+    /// `None` means uploads are disabled and the route is not even mounted.
+    pub upload: Option<Arc<UploadConfig>>,
     pub scheme: Scheme,
 }

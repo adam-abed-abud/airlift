@@ -11,7 +11,7 @@ rust-version = "1.85"
 # CLI parsing. `derive` keeps the argument definitions next to their docs.
 clap = { version = "4.5", features = ["derive"] }
 # HTTP server + async runtime.
-axum = { version = "0.8", features = ["http1", "tokio", "json", "query"] }
+axum = { version = "0.8", features = ["http1", "tokio", "json", "query", "multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "signal", "io-util", "time"] }
 # Structured logging. Request/response logging comes from tower-http's TraceLayer later.
 tracing = "0.1"
@@ -34,6 +34,11 @@ httpdate = "1"
 # Frontend files are compiled into the binary in release builds and read
 # from `web/` in debug builds, so UI tweaks need no rebuild while developing.
 rust-embed = "8"
+# Uploads land in a temp file next to their destination and are renamed into
+# place, so a dropped connection never leaves a half-written file behind.
+tempfile = "3"
+fs4 = "1"
+thiserror = "2"
 
 [profile.release]
 # Small, fast single binary is the point of shipping this in Rust.

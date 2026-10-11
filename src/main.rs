@@ -26,6 +26,7 @@ async fn main() -> anyhow::Result<()> {
             files::Share::directories(dirs, *include_hidden)?
         }
     };
+    let upload = resolve_upload(&cli.command, &share)?;
     let host = utils::net::advertised_host(net.host.as_deref(), net.bind);
     let url = format!("http://{host}:{}", net.port);
 
@@ -37,6 +38,9 @@ async fn main() -> anyhow::Result<()> {
     for root in share.roots() {
         println!("Sharing: {}", root.path.display());
     }
+    if let Some(upload) = &upload {
+        println!("Uploads: enabled -> {}", upload.dir.display());
+    }
     println!("URL: {url}");
     println!("Access code: {code}");
     // The QR carries only the URL. Putting the code in it would turn "can see
@@ -46,5 +50,23 @@ async fn main() -> anyhow::Result<()> {
     }
     println!("Press Ctrl+C to stop");
 
-    server::run(SocketAddr::new(net.bind, net.port), server::state(auth, share)).await
+    server::run(SocketAddr::new(net.bind, net.port), server::state(auth, share, upload)).await
+}
+
+/// Turn the upload flags into a config, picking a sensible default
+/// destination when `--upload-dir` is not given.
+fn resolve_upload(
+    command: &cli::Command,
+    share: &files::Share,
+) -> anyhow::Result<Option<transfer::upload::UploadConfig>> {
+    let opts = command.upload();
+    if !opts.allow_upload {
+        return Ok(None);
+    }
+    let dir = match (&opts.upload_dir, command) {
+        (Some(dir), _) => dir.clone(),
+        (None, cli::Command::Serve { .. }) => share.roots()[0].path.clone(),
+        (None, cli::Command::Send { .. }) => std::env::current_dir()?,
+    };
+    Ok(Some(transfer::upload::UploadConfig::new(&dir, opts.max_upload)?))
 }
