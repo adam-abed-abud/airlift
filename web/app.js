@@ -379,6 +379,7 @@ function buildRow(file) {
   const download = /** @type {HTMLAnchorElement} */ (node.querySelector(".act-download"));
   download.href = downloadUrl(file);
   download.download = file.name;
+  download.addEventListener("click", () => acknowledgeDownload(download));
 
   const preview = /** @type {HTMLButtonElement} */ (node.querySelector(".act-preview"));
   preview.hidden = !file.previewable;
@@ -408,6 +409,29 @@ function buildCell(file) {
     }
   });
   return cell;
+}
+
+/**
+ * The browser owns the download once the link is followed and gives us no
+ * progress, but a button that does nothing on tap feels broken. Show a
+ * brief "started" state so the person knows to look at the browser's
+ * downloads list.
+ * @param {HTMLAnchorElement} button
+ */
+function acknowledgeDownload(button) {
+  if (button.classList.contains("is-busy")) return;
+  const label = button.textContent;
+  button.classList.add("is-busy");
+  button.textContent = "Starting…";
+  setTimeout(() => {
+    button.classList.remove("is-busy");
+    button.classList.add("is-done");
+    button.textContent = "✓ Started";
+    setTimeout(() => {
+      button.classList.remove("is-done");
+      button.textContent = label;
+    }, 2500);
+  }, 900);
 }
 
 $("search").addEventListener("input", (e) => {
@@ -499,6 +523,8 @@ function showPreview(direction) {
   const dl = /** @type {HTMLAnchorElement} */ ($("preview-download"));
   dl.href = downloadUrl(file);
   dl.download = file.name;
+  dl.textContent = "Download";
+  dl.classList.remove("is-busy", "is-done");
   /** @type {HTMLButtonElement} */ ($("preview-prev")).disabled = previewIndex <= 0;
   /** @type {HTMLButtonElement} */ ($("preview-next")).disabled = previewIndex >= previewList.length - 1;
 
@@ -593,6 +619,7 @@ function closePreview() {
 }
 
 $("preview-close").addEventListener("click", closePreview);
+$("preview-download").addEventListener("click", () => acknowledgeDownload(/** @type {HTMLAnchorElement} */ ($("preview-download"))));
 $("preview-prev").addEventListener("click", () => stepPreview(-1));
 $("preview-next").addEventListener("click", () => stepPreview(1));
 
@@ -654,6 +681,75 @@ async function shareFile(file, button) {
 /** @type {XMLHttpRequest | null} */
 let activeUpload = null;
 
+/** Names of files received in this page session, newest first. */
+/** @type {string[]} */
+let recentUploads = [];
+const RECENT_LIMIT = 12;
+
+/**
+ * Show what was just received, with thumbnails when the destination is
+ * part of the share (then the listing knows the files). Matched by name;
+ * if the upload folder is not shared the names still appear, just without
+ * pictures.
+ */
+function renderRecent() {
+  const panel = $("recent");
+  const list = $("recent-list");
+  panel.hidden = recentUploads.length === 0;
+  list.textContent = "";
+  const template = /** @type {HTMLTemplateElement} */ ($("recent-item"));
+  for (const name of recentUploads) {
+    const node = /** @type {HTMLElement} */ (template.content.firstElementChild?.cloneNode(true));
+    /** @type {HTMLElement} */ (node.querySelector(".recent-name")).textContent = name;
+    const box = /** @type {HTMLElement} */ (node.querySelector(".recent-thumb"));
+    const entry = files
+      .filter((f) => f.name === name)
+      .sort((a, b) => (b.modified || 0) - (a.modified || 0))[0];
+    if (entry) {
+      fillThumb(box, entry);
+      box.style.cursor = "pointer";
+      box.addEventListener("click", () => { if (entry.previewable) openPreview(entry); });
+    } else {
+      box.textContent = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toUpperCase() : "file";
+    }
+    list.appendChild(node);
+  }
+}
+
+// Drag and drop from a desktop browser. A counter rather than a boolean
+// because dragenter/dragleave fire for every child element crossed.
+let dragDepth = 0;
+
+document.addEventListener("dragenter", (e) => {
+  if (!(status && status.upload_enabled && status.authenticated)) return;
+  if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return;
+  e.preventDefault();
+  dragDepth += 1;
+  $("drop-target").textContent = status.host_name ? `to ${status.host_name}` : "";
+  $("drop-overlay").hidden = false;
+});
+
+document.addEventListener("dragover", (e) => {
+  if ($("drop-overlay").hidden) return;
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+});
+
+document.addEventListener("dragleave", () => {
+  if ($("drop-overlay").hidden) return;
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) $("drop-overlay").hidden = true;
+});
+
+document.addEventListener("drop", (e) => {
+  if ($("drop-overlay").hidden) return;
+  e.preventDefault();
+  dragDepth = 0;
+  $("drop-overlay").hidden = true;
+  const dropped = e.dataTransfer ? Array.from(e.dataTransfer.files) : [];
+  if (dropped.length > 0) uploadFiles(dropped);
+});
+
 $("upload-input").addEventListener("change", (event) => {
   const input = /** @type {HTMLInputElement} */ (event.currentTarget);
   if (input.files && input.files.length > 0) uploadFiles(Array.from(input.files));
@@ -708,7 +804,9 @@ function uploadFiles(chosen) {
       const saved = body.saved.map((/** @type {{name: string}} */ s) => s.name).join(", ");
       const failed = body.failed.length ? ` Failed: ${body.failed.map((/** @type {{name: string, error: string}} */ f) => `${f.name} (${f.error})`).join(", ")}` : "";
       finish(`Saved: ${saved || "nothing"}.${failed}`);
-      loadFiles();
+      const names = body.saved.map((/** @type {{name: string}} */ s) => s.name).reverse();
+      recentUploads = [...names, ...recentUploads].slice(0, RECENT_LIMIT);
+      loadFiles().then(renderRecent);
     } else if (xhr.status === 401) {
       if (status) status.authenticated = false;
       showLogin("Session ended. Enter the code again.");

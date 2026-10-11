@@ -53,6 +53,10 @@
           <button id="upload-cancel" class="btn btn-quiet">Cancel</button>
         </div>
         <p id="upload-result" class="hint" hidden></p>
+        <div id="recent" hidden>
+          <p class="hint">Received</p>
+          <ul id="recent-list" class="recent-list"></ul>
+        </div>
       </section>
 
       <div class="toolbar">
@@ -105,6 +109,14 @@
     </section>
   </main>
 
+  <!-- Shown while something is dragged over the page (desktop browsers). -->
+  <div id="drop-overlay" class="drop-overlay" hidden>
+    <div class="drop-box">
+      <p class="drop-title">Drop to send</p>
+      <p id="drop-target" class="hint"></p>
+    </div>
+  </div>
+
   <!-- Preview overlay: media plays here via the inline endpoint, which
        supports range requests so Safari can seek through large videos. -->
   <div id="preview" class="overlay" hidden>
@@ -134,6 +146,13 @@
       </button>
       <ul class="group-items"></ul>
     </section>
+  </template>
+
+  <template id="recent-item">
+    <li class="recent">
+      <div class="file-thumb recent-thumb"></div>
+      <div class="recent-name"></div>
+    </li>
   </template>
 
   <template id="file-item">
