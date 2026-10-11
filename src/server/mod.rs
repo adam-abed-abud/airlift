@@ -25,6 +25,7 @@ use crate::auth::Auth;
 use crate::files::Share;
 use crate::transfer::thumbnail::Thumbnailer;
 use crate::transfer::upload::UploadConfig;
+use crate::utils::activity;
 pub use state::{AppState, Scheme};
 
 /// How long to wait for in-flight requests after Ctrl+C before giving up.
@@ -146,9 +147,9 @@ pub async fn run(
     tokio::select! {
         // Ignoring a failure to install the handler is deliberate: the user
         // can still kill the process, and refusing to serve would be worse.
-        _ = tokio::signal::ctrl_c() => info!("shutting down"),
-        _ = deadline => info!("timeout reached; shutting down"),
-        _ = shutdown.cancelled() => {}
+        _ = tokio::signal::ctrl_c() => activity::info("Stopping"),
+        _ = deadline => activity::info("Time is up, stopping"),
+        _ = shutdown.cancelled() => activity::info("Transfer done, stopping (--once)"),
     }
     let _ = stop_tx.send(());
 

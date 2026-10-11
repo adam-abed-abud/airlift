@@ -38,11 +38,22 @@ A headless Chrome session at phone width (via the DevTools protocol) was
 used to verify login, listing, preview, upload progress and logout. Real
 iPad testing is still on the checklist in [ios.md](ios.md).
 
-## Logging
+## Output and logging
 
-`-v` enables debug output including one line per request from
-`tower_http`; `-vv` enables trace. Without `-v`, `RUST_LOG` is honoured,
-e.g. `RUST_LOG=lanshare=debug`. Access codes are printed, never logged.
+Two channels, on purpose:
+
+- **stdout**: the banner and the activity feed (`utils/activity.rs`),
+  plain timestamped lines meant for a person. Colour via
+  `utils/term.rs`, only when stdout is a terminal and `NO_COLOR` is unset.
+- **stderr**: `tracing` diagnostics. Warnings and errors by default; `-v`
+  enables debug including one line per request from `tower_http`; `-vv`
+  enables trace. Without `-v`, `RUST_LOG` is honoured, e.g.
+  `RUST_LOG=lanshare=debug`.
+
+Access codes appear in the feed, never in logs. The device label in the
+feed is sent by the page at login (`deviceName()` in `app.js`), because
+iPadOS Safari presents a Mac User-Agent and only the browser itself can
+tell the two apart.
 
 ## Roadmap
 

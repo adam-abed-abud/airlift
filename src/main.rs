@@ -28,50 +28,104 @@ async fn main() -> anyhow::Result<()> {
     let auth = auth::Auth::new(auth::pin::Pin::generate());
     let code = auth.pin_display();
 
-    println!("LANShare");
-    for root in share.roots() {
-        println!("Sharing: {}", root.path.display());
-    }
-    if let Some(upload) = &upload {
-        println!("Uploads: enabled -> {}", upload.dir.display());
-    }
-    println!("URL: {url}");
-    println!("Access code: {code}");
-    // The QR carries only the URL. Putting the code in it would turn "can see
-    // the screen" into "can read the files", which is a different promise.
-    if let Some(qr) = utils::qr::render(&url) {
-        println!("{qr}");
-    }
     let lifetime = cli.command.lifetime();
     let thumbs = if lifetime.no_thumbnails {
         None
     } else {
-        let tool = transfer::thumbnail::HeicTool::detect();
-        match &tool {
-            Some(t) => println!(
-                "Thumbnails: built-in for JPEG/PNG/GIF/WebP, HEIC via {}",
-                t.describe()
-            ),
-            None => println!(
-                "Thumbnails: built-in for JPEG/PNG/GIF/WebP; no HEIC decoder found \
-                 (install ImageMagick with HEIC support, or libheif-examples)"
-            ),
-        }
-        Some(transfer::thumbnail::Thumbnailer::new(tool))
+        Some(transfer::thumbnail::Thumbnailer::new(
+            transfer::thumbnail::HeicTool::detect(),
+        ))
     };
-    if lifetime.once {
-        println!("Stops after the first completed transfer (--once)");
-    }
-    if let Some(t) = lifetime.timeout {
-        println!(
-            "Stops automatically after {}",
-            humantime::format_duration(t)
-        );
-    }
-    println!("Press Ctrl+C to stop");
+
+    print_banner(
+        &share,
+        &url,
+        &net,
+        &code,
+        upload.as_ref(),
+        thumbs.as_ref(),
+        lifetime,
+    );
 
     let state = server::state(auth, share, upload, thumbs, lifetime.once);
     server::run(SocketAddr::new(net.bind, net.port), state, lifetime.timeout).await
+}
+
+/// Everything a person needs at a glance, in the order they need it: what
+/// is shared, where to point the other device, the code, the QR. The
+/// quieter details (uploads, thumbnails, stop conditions) come after.
+fn print_banner(
+    share: &files::Share,
+    url: &str,
+    net: &cli::NetOptions,
+    code: &str,
+    upload: Option<&transfer::upload::UploadConfig>,
+    thumbs: Option<&transfer::thumbnail::Thumbnailer>,
+    lifetime: &cli::LifetimeOptions,
+) {
+    use utils::term::{bold, cyan, dim, green, human_size, yellow};
+
+    let listing = share.list();
+    let total: u64 = listing.iter().map(|f| f.size).sum();
+    let what = match listing.len() {
+        1 => format!("{} ({})", bold(&share.display_name()), human_size(total)),
+        n => format!(
+            "{} ({n} files, {})",
+            bold(&share.display_name()),
+            human_size(total)
+        ),
+    };
+    println!();
+    println!(
+        "  {}  {}  sharing {what}",
+        bold("LANShare"),
+        dim(env!("CARGO_PKG_VERSION"))
+    );
+    for root in share.roots() {
+        println!("  {}", dim(&root.path.display().to_string()));
+    }
+    println!();
+    println!("  {}   {}", dim("URL "), cyan(&bold(url)));
+    println!("  {}   {}", dim("Code"), green(&bold(code)));
+    println!();
+    // The QR carries only the URL. Putting the code in it would turn "can see
+    // the screen" into "can read the files", which is a different promise.
+    if let Some(qr) = utils::qr::render(url) {
+        for line in qr.lines() {
+            println!("  {line}");
+        }
+    }
+    println!(
+        "  {}",
+        dim(&format!("On this computer: http://127.0.0.1:{}", net.port))
+    );
+    if let Some(upload) = upload {
+        println!("  {} {}", yellow("Uploads enabled →"), upload.dir.display());
+    }
+    match thumbs {
+        None => println!("  {}", dim("Thumbnails off")),
+        Some(t) => match t.heic_tool() {
+            Some(tool) => println!(
+                "  {}",
+                dim(&format!("Thumbnails: HEIC via {}", tool.describe()))
+            ),
+            None => println!(
+                "  {}",
+                dim("Thumbnails: no HEIC decoder found (install ImageMagick or libheif-examples)")
+            ),
+        },
+    }
+    if lifetime.once {
+        println!("  {}", dim("Stops after the first completed transfer"));
+    }
+    if let Some(t) = lifetime.timeout {
+        println!(
+            "  {}",
+            dim(&format!("Stops after {}", humantime::format_duration(t)))
+        );
+    }
+    println!("  {}", dim("Press Ctrl+C to stop"));
+    println!();
 }
 
 /// Turn the upload flags into a config, picking a sensible default

@@ -1,11 +1,15 @@
 use tracing_subscriber::EnvFilter;
 
-/// Initialise `tracing`. The verbosity flag wins over `RUST_LOG` so a casual
-/// `-v` does what people expect, while `RUST_LOG` still works for fine-grained
-/// filtering when no flag is given.
+/// Initialise `tracing` on stderr.
+///
+/// The activity feed on stdout is what people look at; `tracing` is for
+/// diagnostics. Without `-v` only warnings and errors get through, so the
+/// terminal stays readable. The verbosity flag wins over `RUST_LOG` so a
+/// casual `-v` does what people expect, while `RUST_LOG` still works for
+/// fine-grained filtering when no flag is given.
 pub fn init(verbosity: u8) {
     let default = match verbosity {
-        0 => "lanshare=info,tower_http=warn",
+        0 => "lanshare=warn,tower_http=warn",
         1 => "lanshare=debug,tower_http=debug",
         _ => "trace",
     };
@@ -16,6 +20,7 @@ pub fn init(verbosity: u8) {
     };
     tracing_subscriber::fmt()
         .with_env_filter(filter)
+        .with_writer(std::io::stderr)
         .with_target(verbosity > 0)
         .compact()
         .init();

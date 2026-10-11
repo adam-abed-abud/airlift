@@ -13,6 +13,8 @@ const TOKEN_BYTES: usize = 32;
 struct Session {
     created: Instant,
     last_seen: Instant,
+    /// Friendly label like `iPad (192.168.1.23)`, for the activity feed.
+    device: String,
 }
 
 /// In-memory session table. Deliberately not persisted: stopping the program
@@ -24,7 +26,7 @@ pub struct SessionStore {
 }
 
 impl SessionStore {
-    pub fn create(&self) -> String {
+    pub fn create(&self, device: String) -> String {
         let token = random_token();
         let now = Instant::now();
         let mut sessions = self.sessions.lock().unwrap();
@@ -34,9 +36,19 @@ impl SessionStore {
             Session {
                 created: now,
                 last_seen: now,
+                device,
             },
         );
         token
+    }
+
+    /// Device label of a live session, if any.
+    pub fn device(&self, token: &str) -> Option<String> {
+        self.sessions
+            .lock()
+            .unwrap()
+            .get(token)
+            .map(|s| s.device.clone())
     }
 
     /// Check a token and, if valid, extend its idle window.
@@ -84,7 +96,7 @@ mod tests {
     #[test]
     fn create_validate_revoke() {
         let store = SessionStore::default();
-        let token = store.create();
+        let token = store.create("test".into());
         assert_eq!(token.len(), TOKEN_BYTES * 2);
         assert!(store.validate(&token));
         assert!(!store.validate("nope"));
@@ -95,7 +107,7 @@ mod tests {
     #[test]
     fn expired_sessions_are_dropped() {
         let store = SessionStore::default();
-        let token = store.create();
+        let token = store.create("test".into());
         {
             let mut sessions = store.sessions.lock().unwrap();
             let s = sessions.get_mut(&token).unwrap();

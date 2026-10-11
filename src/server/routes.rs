@@ -16,6 +16,7 @@ use crate::files::FileEntry;
 use crate::transfer::download::{Disposition, stream_file};
 use crate::transfer::thumbnail::{Size, ThumbError};
 use crate::transfer::upload::{Saved, UploadError};
+use crate::utils::{activity, term};
 
 #[derive(Serialize)]
 pub struct Status {
@@ -26,6 +27,9 @@ pub struct Status {
     upload_enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_upload_bytes: Option<u64>,
+    /// Name of the sharing computer, shown on the login screen so the
+    /// person knows which machine's terminal to look at for the code.
+    host_name: String,
 }
 
 /// Public: lets the page decide whether to show the login form. Nothing here
@@ -40,12 +44,40 @@ pub async fn status(State(state): State<AppState>, headers: HeaderMap) -> Json<S
         share_name: state.share.display_name(),
         upload_enabled: state.upload.is_some(),
         max_upload_bytes: state.upload.as_ref().map(|u| u.max_bytes),
+        host_name: host_name(),
     })
 }
 
 #[derive(Deserialize)]
 pub struct AuthRequest {
     code: String,
+    /// What the browser thinks it is running on ("iPad", "Mac"). Purely
+    /// cosmetic, for the activity feed; the page computes it because the
+    /// User-Agent alone cannot tell an iPad from a Mac any more.
+    #[serde(default)]
+    device: Option<String>,
+}
+
+pub fn host_name() -> String {
+    gethostname::gethostname().to_string_lossy().into_owned()
+}
+
+/// Reduce a client-supplied device name to something safe to print: short,
+/// printable, no control characters that could mess with the terminal.
+fn device_label(raw: Option<&str>, ip: std::net::IpAddr) -> String {
+    let name: String = raw
+        .unwrap_or("")
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(32)
+        .collect::<String>()
+        .trim()
+        .to_string();
+    if name.is_empty() {
+        format!("Device ({ip})")
+    } else {
+        format!("{name} ({ip})")
+    }
 }
 
 pub async fn login(
@@ -53,9 +85,11 @@ pub async fn login(
     ClientIp(ip): ClientIp,
     Json(body): Json<AuthRequest>,
 ) -> Result<Response, ApiError> {
-    match state.auth.login(ip, &body.code) {
+    let device = device_label(body.device.as_deref(), ip);
+    match state.auth.login(ip, &body.code, device.clone()) {
         Ok(token) => {
             info!(%ip, "login ok");
+            activity::info(format!("{} connected", term::bold(&device)));
             let mut response = (StatusCode::NO_CONTENT, ()).into_response();
             response
                 .headers_mut()
@@ -63,12 +97,14 @@ pub async fn login(
             Ok(response)
         }
         Err(LoginError::WrongPin) => {
-            warn!(%ip, "wrong access code");
+            info!(%ip, "wrong access code");
+            activity::problem(format!("Wrong code from {device}"));
             Err(ApiError::new(StatusCode::UNAUTHORIZED, "wrong code"))
         }
         Err(LoginError::Throttled(wait)) => {
-            warn!(%ip, "login throttled");
+            info!(%ip, "login throttled");
             let secs = wait.as_secs().max(1);
+            activity::problem(format!("{device} locked out for {secs} s"));
             Err(ApiError::new(
                 StatusCode::TOO_MANY_REQUESTS,
                 format!("too many attempts, try again in {secs}s"),
@@ -80,6 +116,9 @@ pub async fn login(
 
 pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Some(token) = session_token(&headers) {
+        if let Some(device) = state.auth.sessions.device(&token) {
+            activity::info(format!("{device} logged out"));
+        }
         state.auth.sessions.revoke(&token);
     }
     let mut response = (StatusCode::NO_CONTENT, ()).into_response();
@@ -148,10 +187,37 @@ pub async fn download(
         .resolve(&id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "no such file"))?;
     info!(name = %file.name, "download");
+    let device = session_token(&headers)
+        .and_then(|t| state.auth.sessions.device(&t))
+        .unwrap_or_else(|| "a device".into());
+    let size = tokio::fs::metadata(&file.path)
+        .await
+        .map(|m| m.len())
+        .unwrap_or(0);
+    // Safari fetches big files in several ranges; announce only the first.
+    let first_request = headers
+        .get(header::RANGE)
+        .and_then(|v| v.to_str().ok())
+        .map(|r| r.starts_with("bytes=0-"))
+        .unwrap_or(true);
+    if first_request {
+        activity::info(format!(
+            "{device} started downloading {} ({})",
+            term::bold(&file.name),
+            term::human_size(size)
+        ));
+    }
+    let started = std::time::Instant::now();
     let done = state.clone();
     let name = file.name.clone();
     let on_complete = Box::new(move || {
         info!(name = %name, "download complete");
+        activity::done(format!(
+            "{} sent to {device} · {} in {}",
+            term::bold(&name),
+            term::human_size(size),
+            term::human_duration(started.elapsed())
+        ));
         done.transfer_completed("download");
     });
     stream_file(&file, &headers, Disposition::Attachment, Some(on_complete)).await
@@ -313,7 +379,35 @@ pub async fn upload(
         }
     }
     if !outcome.saved.is_empty() {
+        let device = session_token(&headers)
+            .and_then(|t| state.auth.sessions.device(&t))
+            .unwrap_or_else(|| "a device".into());
+        let total: u64 = outcome.saved.iter().map(|s| s.size).sum();
+        let mut names: Vec<&str> = outcome
+            .saved
+            .iter()
+            .map(|s| s.name.as_str())
+            .take(3)
+            .collect();
+        if outcome.saved.len() > 3 {
+            names.push("…");
+        }
+        activity::done(format!(
+            "Received {} from {device} · {} · {}",
+            term::bold(&match outcome.saved.len() {
+                1 => "1 file".to_string(),
+                n => format!("{n} files"),
+            }),
+            term::human_size(total),
+            names.join(", ")
+        ));
         state.transfer_completed("upload");
+    }
+    for failure in &outcome.failed {
+        activity::problem(format!(
+            "Upload of {} failed: {}",
+            failure.name, failure.error
+        ));
     }
     Ok(Json(outcome))
 }

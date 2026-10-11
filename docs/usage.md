@@ -42,26 +42,42 @@ All options work with both commands unless noted.
 ## What the terminal shows
 
 ```text
-LANShare
-Sharing: /home/adam/Videos
-Uploads: enabled -> /home/adam/Videos
-URL: http://192.168.1.105:8080
-Access code: 482-913
-[QR code of the URL]
-Press Ctrl+C to stop
+  LANShare  0.1.0  sharing Videos (12 files, 3.4 GB)
+  /home/adam/Videos
+
+  URL    http://192.168.1.105:8080
+  Code   482-913
+
+  [QR code of the URL]
+  On this computer: http://127.0.0.1:8080
+  Uploads enabled → /home/adam/Videos
+  Thumbnails: HEIC via /usr/bin/magick
+  Press Ctrl+C to stop
+
+14:03:21  ▸ iPad (192.168.1.23) connected
+14:03:40  ▸ iPad (192.168.1.23) started downloading movie.mp4 (1.2 GB)
+14:04:19  ✓ movie.mp4 sent to iPad (192.168.1.23) · 1.2 GB in 39 s
+14:05:02  ✓ Received 3 files from iPad (192.168.1.23) · 8.1 MB · IMG_0412.HEIC, IMG_0413.HEIC, IMG_0414.HEIC
+14:05:10  ✗ Wrong code from Android phone (192.168.1.40)
 ```
 
 The QR code contains only the URL, never the code. The code is new every
-run and is not configurable by design.
+run and is not configurable by design. Colour is used when stdout is a
+terminal and is disabled by `NO_COLOR`.
+
+Below the banner is the activity feed: connections, downloads (announced
+when they start and when the last byte went out), uploads, wrong codes
+and lockouts. The device name comes from the browser ("iPad", "Mac",
+"Android phone"); the address is the client's IP.
 
 If too many wrong codes are entered (from anywhere), a new code is
-generated and printed:
+generated and printed in the feed:
 
 ```text
-!! Too many wrong codes. New access code: 913-204
+14:06:11  ✗ Too many wrong codes. New access code: 913-204
 ```
 
-Every login and download is logged with the client's IP.
+Diagnostic logs go to stderr and are silent unless `-v` is given.
 
 ## On the device
 

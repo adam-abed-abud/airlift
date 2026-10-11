@@ -14,6 +14,8 @@ use std::time::Duration;
 
 use tracing::warn;
 
+use crate::utils::{activity, term};
+
 use pin::Pin;
 use session::SessionStore;
 use throttle::{FailureOutcome, Throttle};
@@ -57,7 +59,7 @@ impl Auth {
     /// nothing about whether its guess was right. After enough failures from
     /// anywhere the PIN is rotated: a brute-forcer then starts from scratch,
     /// and the person at the terminal sees a loud warning plus the new code.
-    pub fn login(&self, ip: IpAddr, candidate: &str) -> Result<String, LoginError> {
+    pub fn login(&self, ip: IpAddr, candidate: &str, device: String) -> Result<String, LoginError> {
         let mut throttle = self.throttle.lock().unwrap();
         if let Some(wait) = throttle.retry_after(ip) {
             return Err(LoginError::Throttled(wait));
@@ -65,7 +67,7 @@ impl Auth {
 
         if self.pin.read().unwrap().verify(candidate) {
             throttle.record_success(ip);
-            return Ok(self.sessions.create());
+            return Ok(self.sessions.create(device));
         }
 
         match throttle.record_failure(ip) {
@@ -74,9 +76,10 @@ impl Auth {
                 let shown = fresh.display();
                 *self.pin.write().unwrap() = fresh;
                 warn!("too many failed login attempts; access code rotated");
-                // Printed, not logged: the code must reach the person at the
-                // keyboard even when logs are filtered or redirected.
-                println!("\n!! Too many wrong codes. New access code: {shown}\n");
+                activity::problem(format!(
+                    "Too many wrong codes. New access code: {}",
+                    term::bold(&shown)
+                ));
                 Err(LoginError::WrongPin)
             }
             FailureOutcome::Locked(wait) => Err(LoginError::Throttled(wait)),

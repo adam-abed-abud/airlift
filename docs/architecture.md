@@ -27,7 +27,8 @@ src/
                   assets.rs   embedded frontend
                   state.rs    AppState, Scheme
                   error.rs    JSON error type
-  utils/          net.rs (LAN IP), qr.rs, log.rs
+  utils/          net.rs (LAN IP), qr.rs, log.rs, term.rs (colour),
+                  activity.rs (the stdout feed)
 web/
   index.html, style.css, app.js, favicon.svg
 tests/

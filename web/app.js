@@ -96,6 +96,24 @@ async function init() {
 
 // -------------------------------------------------------------- login ---
 
+/**
+ * A short label for the activity feed on the sharing computer. iPadOS
+ * Safari sends a Mac User-Agent, so the server cannot tell; touch support
+ * is the giveaway, and that is only visible from here.
+ */
+function deviceName() {
+  const ua = navigator.userAgent;
+  const touch = navigator.maxTouchPoints > 1;
+  if (/iPhone/.test(ua)) return "iPhone";
+  if (/iPad/.test(ua) || (/Macintosh/.test(ua) && touch)) return "iPad";
+  if (/Android/.test(ua)) return /Mobile/.test(ua) ? "Android phone" : "Android tablet";
+  if (/Macintosh/.test(ua)) return "Mac";
+  if (/Windows/.test(ua)) return "Windows PC";
+  if (/CrOS/.test(ua)) return "Chromebook";
+  if (/Linux/.test(ua)) return "Linux PC";
+  return "Browser";
+}
+
 $("login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = /** @type {HTMLFormElement} */ (event.currentTarget);
@@ -106,7 +124,7 @@ $("login-form").addEventListener("submit", async (event) => {
     await api("/api/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, device: deviceName() }),
     });
     if (status) status.authenticated = true;
     showFiles();
