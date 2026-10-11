@@ -60,12 +60,6 @@ impl SessionStore {
         self.sessions.lock().unwrap().remove(token);
     }
 
-    pub fn active_count(&self) -> usize {
-        let now = Instant::now();
-        let mut sessions = self.sessions.lock().unwrap();
-        prune(&mut sessions, now);
-        sessions.len()
-    }
 }
 
 fn is_live(s: &Session, now: Instant) -> bool {
@@ -109,6 +103,6 @@ mod tests {
             s.last_seen = Instant::now() - IDLE_TIMEOUT - Duration::from_secs(1);
         }
         assert!(!store.validate(&token));
-        assert_eq!(store.active_count(), 0);
+        assert!(store.sessions.lock().unwrap().is_empty());
     }
 }

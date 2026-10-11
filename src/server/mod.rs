@@ -20,6 +20,7 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 use crate::auth::Auth;
+use crate::files::Share;
 pub use state::{AppState, Scheme};
 
 /// How long to wait for in-flight requests after Ctrl+C before giving up.
@@ -30,10 +31,23 @@ const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
 /// Build the application router. Kept separate from `run` so tests can drive
 /// the router without opening a socket.
 pub fn router(state: AppState) -> Router {
+    // Everything that touches files sits behind the session check. The
+    // `route_layer` form means unknown paths still 404 instead of 401, which
+    // keeps the API from being a probe for valid routes.
+    let protected = Router::new()
+        .route("/files", get(routes::list_files))
+        .route("/files/{id}/download", get(routes::download))
+        .route("/files/{id}/preview", get(routes::preview))
+        .route_layer(axum_mw::from_fn_with_state(
+            state.clone(),
+            middleware::require_session,
+        ));
+
     let api = Router::new()
         .route("/status", get(routes::status))
         .route("/auth", post(routes::login))
         .route("/logout", post(routes::logout))
+        .merge(protected)
         .layer(axum_mw::from_fn_with_state(
             state.clone(),
             middleware::same_origin_only,
@@ -54,9 +68,10 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-pub fn state(auth: Auth) -> AppState {
+pub fn state(auth: Auth, share: Share) -> AppState {
     AppState {
         auth: Arc::new(auth),
+        share: Arc::new(share),
         scheme: Scheme::Http,
     }
 }

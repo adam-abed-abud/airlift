@@ -5,7 +5,9 @@
 
 mod auth;
 mod cli;
+mod files;
 mod server;
+mod transfer;
 mod utils;
 
 use std::net::SocketAddr;
@@ -18,6 +20,12 @@ async fn main() -> anyhow::Result<()> {
     utils::log::init(cli.verbose);
 
     let net = cli.command.net().clone();
+    let share = match &cli.command {
+        cli::Command::Send { file, .. } => files::Share::single_file(file)?,
+        cli::Command::Serve { dirs, include_hidden, .. } => {
+            files::Share::directories(dirs, *include_hidden)?
+        }
+    };
     let host = utils::net::advertised_host(net.host.as_deref(), net.bind);
     let url = format!("http://{host}:{}", net.port);
 
@@ -26,6 +34,9 @@ async fn main() -> anyhow::Result<()> {
     let code = auth.pin_display();
 
     println!("LANShare");
+    for root in share.roots() {
+        println!("Sharing: {}", root.path.display());
+    }
     println!("URL: {url}");
     println!("Access code: {code}");
     // The QR carries only the URL. Putting the code in it would turn "can see
@@ -35,5 +46,5 @@ async fn main() -> anyhow::Result<()> {
     }
     println!("Press Ctrl+C to stop");
 
-    server::run(SocketAddr::new(net.bind, net.port), server::state(auth)).await
+    server::run(SocketAddr::new(net.bind, net.port), server::state(auth, share)).await
 }

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::auth::Auth;
+use crate::files::Share;
 
 /// Scheme the server is reachable on. Only HTTP exists today, but cookie
 /// flags and origin checks already branch on this so an HTTPS mode can be
@@ -24,5 +25,6 @@ impl Scheme {
 #[derive(Clone)]
 pub struct AppState {
     pub auth: Arc<Auth>,
+    pub share: Arc<Share>,
     pub scheme: Scheme,
 }

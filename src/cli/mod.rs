@@ -37,6 +37,11 @@ pub enum Command {
         #[arg(required = true)]
         dirs: Vec<PathBuf>,
 
+        /// Also list dot-files and dot-directories. Off by default because
+        /// `.git`, `.env` and friends are rarely what you meant to share.
+        #[arg(long)]
+        include_hidden: bool,
+
         #[command(flatten)]
         net: NetOptions,
     },

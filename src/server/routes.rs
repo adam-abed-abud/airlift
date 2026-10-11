@@ -2,7 +2,7 @@
 //! auth/files/transfer modules and shape the response.
 
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
@@ -12,11 +12,15 @@ use super::error::ApiError;
 use super::middleware::{ClientIp, session_token};
 use super::state::{AppState, Scheme};
 use crate::auth::{COOKIE_NAME, LoginError, session::MAX_LIFETIME};
+use crate::files::FileEntry;
+use crate::transfer::download::{Disposition, stream_file};
 
 #[derive(Serialize)]
 pub struct Status {
     version: &'static str,
     authenticated: bool,
+    /// Shown as the page title before login; a folder name is not a secret.
+    share_name: String,
 }
 
 /// Public: lets the page decide whether to show the login form. Nothing here
@@ -28,6 +32,7 @@ pub async fn status(State(state): State<AppState>, headers: HeaderMap) -> Json<S
     Json(Status {
         version: env!("CARGO_PKG_VERSION"),
         authenticated,
+        share_name: state.share.display_name(),
     })
 }
 
@@ -94,4 +99,49 @@ fn clear_cookie(scheme: Scheme) -> HeaderValue {
     let secure = if scheme == Scheme::Https { "; Secure" } else { "" };
     let value = format!("{COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0{secure}");
     HeaderValue::from_str(&value).expect("cookie is ASCII")
+}
+
+#[derive(Serialize)]
+pub struct FileList {
+    files: Vec<FileEntry>,
+    truncated: bool,
+}
+
+pub async fn list_files(State(state): State<AppState>) -> Json<FileList> {
+    // Walking the tree is blocking I/O; keep it off the async workers so a
+    // slow disk cannot stall the download streams of other clients.
+    let share = state.share.clone();
+    let files = tokio::task::spawn_blocking(move || share.list())
+        .await
+        .unwrap_or_default();
+    let truncated = files.len() >= crate::files::MAX_ENTRIES;
+    Json(FileList { files, truncated })
+}
+
+pub async fn download(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let file = state
+        .share
+        .resolve(&id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "no such file"))?;
+    info!(name = %file.name, "download");
+    stream_file(&file, &headers, Disposition::Attachment).await
+}
+
+pub async fn preview(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let file = state
+        .share
+        .resolve(&id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "no such file"))?;
+    if !crate::files::is_previewable(&file.mime) {
+        return Err(ApiError::new(StatusCode::UNSUPPORTED_MEDIA_TYPE, "no preview for this type"));
+    }
+    stream_file(&file, &headers, Disposition::Inline).await
 }
