@@ -10,7 +10,7 @@ use http_body_util::BodyExt;
 use lanshare::auth::{Auth, pin::Pin};
 use lanshare::files::Share;
 use lanshare::server;
-use lanshare::transfer::thumbnail::{HeicTool, Thumbnailer};
+use lanshare::transfer::thumbnail::{HeicTool, Thumbnailer, VideoTool};
 use lanshare::transfer::upload::UploadConfig;
 use tempfile::TempDir;
 use tower::ServiceExt;
@@ -36,6 +36,15 @@ fn fixture_with(uploads: bool, once: bool) -> Fixture {
 }
 
 fn fixture_full(uploads: bool, once: bool, heic_tool: Option<HeicTool>) -> Fixture {
+    fixture_tools(uploads, once, heic_tool, None)
+}
+
+fn fixture_tools(
+    uploads: bool,
+    once: bool,
+    heic_tool: Option<HeicTool>,
+    video_tool: Option<VideoTool>,
+) -> Fixture {
     let share_dir = tempfile::tempdir().unwrap();
     std::fs::write(
         share_dir.path().join("hello.txt"),
@@ -55,7 +64,7 @@ fn fixture_full(uploads: bool, once: bool, heic_tool: Option<HeicTool>) -> Fixtu
 
     let share = Share::directories(&[share_dir.path().to_path_buf()], false).unwrap();
     let auth = Auth::new(Pin::from_digits(PIN).unwrap());
-    let thumbs = Some(Thumbnailer::new(heic_tool));
+    let thumbs = Some(Thumbnailer::new(heic_tool, video_tool));
     let state = server::state(auth, share, upload, thumbs, once);
     let shutdown = state.shutdown.clone();
     let app = server::router(state);
@@ -535,6 +544,7 @@ async fn thumbnails_for_images_with_caching_headers() {
     };
     assert!(flag("photo.png"));
     assert!(!flag("IMG_0001.HEIC"));
+    assert!(!flag("clip.mp4"));
     assert!(!flag("archive.zip"));
 
     let id = file_id(&f.app, &cookie, "photo.png").await;
@@ -655,4 +665,51 @@ async fn thumbnails_can_be_disabled() {
             .status(),
         StatusCode::NOT_FOUND
     );
+}
+
+/// Video frames also come from an external program. A fake `ffmpeg` that
+/// ignores its arguments except the output path stands in for the real one.
+#[cfg(unix)]
+#[tokio::test]
+async fn video_thumbnail_via_external_tool() {
+    use std::os::unix::fs::PermissionsExt;
+    let tools = tempfile::tempdir().unwrap();
+    let prepared = tools.path().join("frame.jpg");
+    {
+        use image::{DynamicImage, ImageBuffer, Rgb};
+        let img =
+            ImageBuffer::from_fn(640, 360, |x, y| Rgb([(x % 256) as u8, (y % 256) as u8, 90]));
+        DynamicImage::ImageRgb8(img).save(&prepared).unwrap();
+    }
+    // ffmpeg's output path is its last argument.
+    let script = tools.path().join("ffmpeg");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\nfor last; do :; done\ncp {} \"$last\"\n",
+            prepared.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let f = fixture_tools(false, false, None, VideoTool::from_program(&script));
+    let cookie = login(&f.app).await;
+    let list = body_json(send(&f.app, get("/api/files", Some(&cookie))).await).await;
+    assert!(
+        list["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["name"] == "clip.mp4" && e["thumbnail"] == true)
+    );
+
+    let id = file_id(&f.app, &cookie, "clip.mp4").await;
+    let res = send(
+        &f.app,
+        get(&format!("/api/files/{id}/thumb"), Some(&cookie)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(jpeg_dimensions(&body_bytes(res).await), (320, 180));
 }

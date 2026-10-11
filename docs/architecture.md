@@ -20,7 +20,8 @@ src/
   transfer/       download.rs streaming responses, Range, Content-Disposition
                   range.rs    Range header parsing
                   upload.rs   multipart -> temp file -> rename, sanitising
-                  thumbnail.rs image -> small JPEG; HEIC via external tool; LRU cache
+                  thumbnail.rs image -> small JPEG; HEIC and video frames via
+                              external tools; LRU cache
   server/         mod.rs      router assembly, run loop, shutdown
                   routes.rs   handlers
                   middleware.rs require_session, same_origin_only, ClientIp
@@ -88,9 +89,10 @@ applied per route so it only affects uploads.
 **Thumbnails: pure Rust where possible, a subprocess where not.** The
 `image` crate handles JPEG/PNG/GIF/WebP/BMP/TIFF, including EXIF
 orientation, inside the process. HEIC has no Rust decoder and libheif
-would drag in a C++ toolchain plus libde265 at build time, so instead an
-external program found on `PATH` converts HEIC to JPEG in a private temp
-directory; the source is symlinked there under a fixed name so no tool
+would drag in a C++ toolchain plus libde265 at build time, and video
+frames would need a codec stack, so instead an external program found on
+`PATH` (ImageMagick and friends for HEIC, ffmpeg or `gst-launch-1.0` for
+video) converts the source to JPEG in a private temp directory; the source is symlinked there under a fixed name so no tool
 ever parses a user-controlled path (ImageMagick reads `a:b.heic` as a
 coder prefix). Every rendition then goes through the same Rust
 resize/orient/encode step, so output is uniform whichever decoder ran.

@@ -34,6 +34,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         Some(transfer::thumbnail::Thumbnailer::new(
             transfer::thumbnail::HeicTool::detect(),
+            transfer::thumbnail::VideoTool::detect(),
         ))
     };
 
@@ -104,16 +105,17 @@ fn print_banner(
     }
     match thumbs {
         None => println!("  {}", dim("Thumbnails off")),
-        Some(t) => match t.heic_tool() {
-            Some(tool) => println!(
-                "  {}",
-                dim(&format!("Thumbnails: HEIC via {}", tool.describe()))
-            ),
-            None => println!(
-                "  {}",
-                dim("Thumbnails: no HEIC decoder found (install ImageMagick or libheif-examples)")
-            ),
-        },
+        Some(t) => {
+            let heic = match t.heic_tool() {
+                Some(tool) => format!("HEIC via {}", tool.describe()),
+                None => "no HEIC decoder (install ImageMagick or libheif-examples)".to_string(),
+            };
+            let video = match t.video_tool() {
+                Some(tool) => format!("video via {}", tool.describe()),
+                None => "no video decoder (install ffmpeg)".to_string(),
+            };
+            println!("  {}", dim(&format!("Thumbnails: {heic} · {video}")));
+        }
     }
     if lifetime.once {
         println!("  {}", dim("Stops after the first completed transfer"));

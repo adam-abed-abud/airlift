@@ -417,6 +417,18 @@ select {
 
 .cell.has-thumb .cell-name { display: none; }
 
+/* Videos with a frame thumbnail get a play glyph so they are not mistaken
+   for photos. */
+.cell.is-video.has-thumb .cell-button::after {
+  content: "▶";
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  color: #fff;
+  font-size: 0.85rem;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+}
+
 /* ------------------------------------------------------------ upload --- */
 
 .progress {

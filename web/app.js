@@ -397,6 +397,7 @@ function buildCell(file) {
   const cell = /** @type {HTMLElement} */ (template.content.firstElementChild?.cloneNode(true));
   fillThumb(/** @type {HTMLElement} */ (cell.querySelector(".cell-thumb")), file);
   cell.classList.toggle("has-thumb", file.thumbnail);
+  cell.classList.toggle("is-video", file.mime.startsWith("video/"));
   /** @type {HTMLElement} */ (cell.querySelector(".cell-name")).textContent = file.name;
   cell.querySelector(".cell-button")?.addEventListener("click", () => {
     if (file.previewable) {

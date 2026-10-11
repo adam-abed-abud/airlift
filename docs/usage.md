@@ -97,7 +97,14 @@ Sessions expire after 2 hours of inactivity and after 12 hours regardless.
 
 Image files get a thumbnail in the list and a grid view, which is chosen
 automatically when at least half of the shared files are images. The
-choice is remembered per device.
+choice is remembered per device, as is the sort order.
+
+The page groups files by folder (collapsible), sorts by name, newest or
+largest, filters by photos/videos/other and searches by name. The
+preview overlay steps through the files currently shown with a swipe,
+the on-screen arrows or the keyboard arrows. On a desktop browser, files
+dragged onto the page are uploaded when uploads are enabled, and the
+upload panel keeps a strip of what was received in this session.
 
 - JPEG, PNG, GIF, WebP, BMP and TIFF are decoded by LANShare itself.
   EXIF orientation is applied, so phone photos are not sideways.
@@ -110,6 +117,10 @@ choice is remembered per device.
   to force a specific one.
 - Without a decoder, HEIC files show a type badge instead and can still be
   downloaded and, on Safari, previewed.
+- Videos get a frame thumbnail (one second in, or the first frame for
+  shorter clips) when `ffmpeg` or GStreamer's `gst-launch-1.0` is on
+  `PATH`. `LANSHARE_VIDEO_TOOL=/path/to/program` forces one. Phone
+  recordings are rotated correctly by both tools.
 - Thumbnails are generated on demand, at most a few at a time, and cached
   in memory (64 MB) for the lifetime of the run. The browser caches them
   for a day; a changed file gets a new URL automatically.

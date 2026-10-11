@@ -58,8 +58,10 @@ tell the two apart.
 ## Roadmap
 
 Implemented (v0.1): everything under "Essential MVP" in
-`lanshare_project_notes.md`, plus `--once`, `--timeout` and image
-thumbnails with a grid view (HEIC through an external tool).
+`lanshare_project_notes.md`, plus `--once`, `--timeout`, image and video
+thumbnails with a grid view (HEIC and video through external tools),
+folder grouping, sort/filter/search, a swipeable preview, drag-and-drop
+uploads and a terminal activity feed.
 
 Planned, roughly in order:
 
@@ -70,10 +72,9 @@ Planned, roughly in order:
 4. Push mode: CLI announces a new file to an open page.
 5. Clipboard/text snippets.
 6. Connected-device view and optional per-device approval.
-7. Video thumbnails (first frame via `ffmpeg`, same external-tool pattern).
-8. Optional native HEIC decoding behind a cargo feature (libheif +
+7. Optional native HEIC decoding behind a cargo feature (libheif +
    libde265) for machines without ImageMagick.
-9. Release builds for macOS, Windows and Raspberry Pi.
+8. Release builds for macOS, Windows and Raspberry Pi.
 
 ## Conventions
 

@@ -21,8 +21,10 @@ Press Ctrl+C to stop
   resumable downloads). Original bytes and filenames are preserved.
 - Optional uploads *to* your computer from the iPhone/iPad Photos app or
   Files, behind an explicit flag.
-- Photo grid with thumbnails, including HEIC when ImageMagick or libheif's
-  tools are installed.
+- Photo grid with thumbnails, swipeable preview, folder grouping, search.
+  HEIC and video thumbnails use ImageMagick, libheif or ffmpeg/GStreamer
+  when installed.
+- Terminal shows a live feed: who connected, what was sent, what arrived.
 
 ## Install
 
