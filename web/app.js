@@ -460,17 +460,58 @@ function shortType(mime) {
 
 // ------------------------------------------------------------ preview ---
 
+/** Files the overlay can step through: the previewable subset of what is
+ *  currently shown, in display order. */
+/** @type {FileEntry[]} */
+let previewList = [];
+let previewIndex = -1;
+
 /** @param {FileEntry} file */
-async function openPreview(file) {
-  const url = `/api/files/${encodeURIComponent(file.id)}/preview`;
+function previewUrl(file) {
+  return `/api/files/${encodeURIComponent(file.id)}/preview`;
+}
+
+/** @param {FileEntry} file */
+function openPreview(file) {
+  previewList = visibleFiles.filter((f) => f.previewable);
+  previewIndex = previewList.findIndex((f) => f.id === file.id);
+  if (previewIndex < 0) { previewList = [file]; previewIndex = 0; }
+  $("preview").hidden = false;
+  showPreview(0);
+}
+
+/**
+ * Render the current item. `direction` is -1/0/1 and only drives the
+ * slide animation.
+ * @param {number} direction
+ */
+function showPreview(direction) {
+  const file = previewList[previewIndex];
+  if (!file) return;
   const body = $("preview-body");
   body.textContent = "";
-  $("preview-name").textContent = file.name;
-  const dl = /** @type {HTMLAnchorElement} */ ($("preview-download"));
-  dl.href = `/api/files/${encodeURIComponent(file.id)}/download`;
-  dl.download = file.name;
-  $("preview").hidden = false;
+  body.classList.remove("enter-left", "enter-right");
+  if (direction > 0) body.classList.add("enter-left");
+  if (direction < 0) body.classList.add("enter-right");
 
+  $("preview-name").textContent = file.name;
+  $("preview-counter").textContent = previewList.length > 1 ? `${previewIndex + 1} of ${previewList.length}` : "";
+  const dl = /** @type {HTMLAnchorElement} */ ($("preview-download"));
+  dl.href = downloadUrl(file);
+  dl.download = file.name;
+  /** @type {HTMLButtonElement} */ ($("preview-prev")).disabled = previewIndex <= 0;
+  /** @type {HTMLButtonElement} */ ($("preview-next")).disabled = previewIndex >= previewList.length - 1;
+
+  renderPreviewContent(file, body);
+  preloadNeighbours();
+}
+
+/**
+ * @param {FileEntry} file
+ * @param {HTMLElement} body
+ */
+async function renderPreviewContent(file, body) {
+  const url = previewUrl(file);
   if (file.mime.startsWith("image/")) {
     const img = document.createElement("img");
     img.src = url;
@@ -487,7 +528,7 @@ async function openPreview(file) {
         note.className = "hint overlay-note";
         note.textContent = "Converted preview; Download gives the original file.";
         body.appendChild(note);
-      }, { once: false });
+      });
     }
     body.appendChild(img);
   } else if (file.mime.startsWith("video/")) {
@@ -515,12 +556,34 @@ async function openPreview(file) {
     body.appendChild(pre);
     try {
       const res = await api(url, { headers: { Range: `bytes=0-${TEXT_PREVIEW_LIMIT - 1}` } });
-      pre.textContent = await res.text();
-      if (file.size > TEXT_PREVIEW_LIMIT) pre.textContent += "\n\n[preview truncated]";
+      const text = await res.text();
+      // The person may have moved on while this was loading.
+      if (!pre.isConnected) return;
+      pre.textContent = text + (file.size > TEXT_PREVIEW_LIMIT ? "\n\n[preview truncated]" : "");
     } catch (e) {
       pre.textContent = e instanceof Error ? e.message : "Preview failed";
     }
   }
+}
+
+/** Warm the browser cache for the neighbouring images so a swipe is instant. */
+function preloadNeighbours() {
+  for (const i of [previewIndex + 1, previewIndex - 1]) {
+    const f = previewList[i];
+    if (f && f.mime.startsWith("image/")) {
+      const img = new Image();
+      img.src = previewUrl(f);
+    }
+  }
+}
+
+/** @param {number} step */
+function stepPreview(step) {
+  if ($("preview").hidden) return;
+  const next = previewIndex + step;
+  if (next < 0 || next >= previewList.length) return;
+  previewIndex = next;
+  showPreview(step);
 }
 
 function closePreview() {
@@ -530,7 +593,29 @@ function closePreview() {
 }
 
 $("preview-close").addEventListener("click", closePreview);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePreview(); });
+$("preview-prev").addEventListener("click", () => stepPreview(-1));
+$("preview-next").addEventListener("click", () => stepPreview(1));
+
+document.addEventListener("keydown", (e) => {
+  if ($("preview").hidden) return;
+  if (e.key === "Escape") closePreview();
+  else if (e.key === "ArrowRight") stepPreview(1);
+  else if (e.key === "ArrowLeft") stepPreview(-1);
+});
+
+// Swipe: a mostly-horizontal move of at least 50 px between touchstart and
+// touchend. Vertical movement is left to the browser (scrolling a PDF).
+let touchStartX = 0;
+let touchStartY = 0;
+$("preview-stage").addEventListener("touchstart", (e) => {
+  touchStartX = e.changedTouches[0].clientX;
+  touchStartY = e.changedTouches[0].clientY;
+}, { passive: true });
+$("preview-stage").addEventListener("touchend", (e) => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy) * 1.5) stepPreview(dx < 0 ? 1 : -1);
+}, { passive: true });
 
 // -------------------------------------------------------------- share ---
 

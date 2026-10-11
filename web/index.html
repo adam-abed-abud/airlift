@@ -109,11 +109,20 @@
        supports range requests so Safari can seek through large videos. -->
   <div id="preview" class="overlay" hidden>
     <div class="overlay-bar">
-      <span id="preview-name" class="overlay-title"></span>
+      <div class="overlay-heading">
+        <span id="preview-name" class="overlay-title"></span>
+        <span id="preview-counter" class="hint"></span>
+      </div>
       <a id="preview-download" class="btn btn-primary" download>Download</a>
       <button id="preview-close" class="btn btn-quiet" aria-label="Close">✕</button>
     </div>
-    <div id="preview-body" class="overlay-body"></div>
+    <div id="preview-stage" class="overlay-stage">
+      <!-- Arrows for mouse and keyboard users; on touch screens a swipe
+           does the same and the arrows stay out of the way. -->
+      <button id="preview-prev" class="nav-arrow nav-prev" aria-label="Previous">‹</button>
+      <div id="preview-body" class="overlay-body"></div>
+      <button id="preview-next" class="nav-arrow nav-next" aria-label="Next">›</button>
+    </div>
   </div>
 
   <template id="group-item">
