@@ -27,6 +27,11 @@ before the file is fully transferred.
 
 Previewing does not save anything. Use Download for that.
 
+Safari decodes HEIC natively, so previews of iPhone photos show the
+original. Thumbnails in the list and grid come from the server; for HEIC
+that requires a decoder on the sharing computer (see
+[usage.md](usage.md#thumbnails)).
+
 ## Getting photos and videos into the Photos app
 
 A browser cannot write into the Photos library silently. There are two

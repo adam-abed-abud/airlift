@@ -50,10 +50,17 @@
 
       <div class="toolbar">
         <p id="file-count" class="hint"></p>
-        <button id="refresh" class="btn btn-quiet">Refresh</button>
+        <div class="toolbar-actions">
+          <div class="segmented" role="group" aria-label="View">
+            <button id="view-list" class="btn btn-quiet" aria-pressed="true">List</button>
+            <button id="view-grid" class="btn btn-quiet" aria-pressed="false">Grid</button>
+          </div>
+          <button id="refresh" class="btn btn-quiet">Refresh</button>
+        </div>
       </div>
       <p id="files-error" class="error" role="alert" hidden></p>
       <ul id="file-list" class="file-list"></ul>
+      <ul id="file-grid" class="file-grid" hidden></ul>
       <p id="empty" class="hint" hidden>Nothing shared yet.</p>
     </section>
   </main>
@@ -71,6 +78,7 @@
 
   <template id="file-item">
     <li class="file">
+      <div class="file-thumb"></div>
       <div class="file-main">
         <div class="file-name"></div>
         <div class="file-meta hint"></div>
@@ -80,6 +88,17 @@
         <button class="btn btn-quiet act-share" hidden>Share…</button>
         <a class="btn btn-primary act-download" download>Download</a>
       </div>
+    </li>
+  </template>
+
+  <!-- Grid cells: tap opens the preview (which has Download), or downloads
+       directly for files that cannot be previewed. -->
+  <template id="grid-item">
+    <li class="cell">
+      <button class="cell-button">
+        <div class="file-thumb cell-thumb"></div>
+        <div class="cell-name"></div>
+      </button>
     </li>
   </template>
 

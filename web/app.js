@@ -10,7 +10,7 @@
 //  - Uploads use a real <input type=file>, which is what makes iOS offer
 //    Photo Library / Files / Camera.
 
-/** @typedef {{id: string, name: string, path: string, root: string, size: number, modified: number|null, mime: string, previewable: boolean}} FileEntry */
+/** @typedef {{id: string, name: string, path: string, root: string, size: number, modified: number|null, mime: string, previewable: boolean, thumbnail: boolean}} FileEntry */
 /** @typedef {{version: string, authenticated: boolean, share_name: string, upload_enabled?: boolean, max_upload_bytes?: number}} Status */
 
 /** Files above this size are not offered via the Share sheet, because the
@@ -130,6 +130,69 @@ $("logout").addEventListener("click", async () => {
 /** @type {FileEntry[]} */
 let files = [];
 
+/** @type {"list" | "grid"} */
+let view = "list";
+let viewChosen = false;
+try {
+  const saved = localStorage.getItem("lanshare-view");
+  if (saved === "list" || saved === "grid") { view = saved; viewChosen = true; }
+} catch (_) { /* private mode or storage disabled: default stays */ }
+
+/**
+ * Thumbnail URL. The query carries size and mtime so a changed file gets a
+ * new URL and the browser's day-long cache never shows a stale image.
+ * @param {FileEntry} file
+ * @param {"small" | "large"} size
+ */
+function thumbUrl(file, size) {
+  return `/api/files/${encodeURIComponent(file.id)}/thumb?size=${size}&v=${file.size}-${file.modified || 0}`;
+}
+
+/**
+ * Fill a `.file-thumb` box with either a lazy-loaded thumbnail or a type
+ * badge. A thumbnail that fails to load (corrupt file, decoder error)
+ * degrades to the badge rather than a broken-image icon.
+ * @param {HTMLElement} box
+ * @param {FileEntry} file
+ */
+function fillThumb(box, file) {
+  const badge = () => { box.textContent = badgeText(file); };
+  if (!file.thumbnail) { badge(); return; }
+  const img = document.createElement("img");
+  img.loading = "lazy";
+  img.decoding = "async";
+  img.alt = "";
+  img.src = thumbUrl(file, "small");
+  img.addEventListener("error", badge);
+  box.textContent = "";
+  box.appendChild(img);
+}
+
+/** @param {FileEntry} file */
+function badgeText(file) {
+  const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".") + 1) : "";
+  if (ext && ext.length <= 5) return ext;
+  const [kind] = file.mime.split("/");
+  return kind === "application" ? "file" : kind;
+}
+
+/** @param {"list" | "grid"} next */
+function setView(next) {
+  view = next;
+  $("file-list").hidden = view !== "list";
+  $("file-grid").hidden = view !== "grid";
+  $("view-list").setAttribute("aria-pressed", String(view === "list"));
+  $("view-grid").setAttribute("aria-pressed", String(view === "grid"));
+}
+
+$("view-list").addEventListener("click", () => { viewChosen = true; remember("list"); setView("list"); });
+$("view-grid").addEventListener("click", () => { viewChosen = true; remember("grid"); setView("grid"); });
+
+/** @param {"list" | "grid"} v */
+function remember(v) {
+  try { localStorage.setItem("lanshare-view", v); } catch (_) { /* fine without */ }
+}
+
 async function loadFiles() {
   const error = $("files-error");
   error.hidden = true;
@@ -148,9 +211,21 @@ async function loadFiles() {
 /** @param {boolean} truncated */
 function renderFiles(truncated) {
   const list = $("file-list");
+  const grid = $("file-grid");
   const template = /** @type {HTMLTemplateElement} */ ($("file-item"));
+  const cellTemplate = /** @type {HTMLTemplateElement} */ ($("grid-item"));
   list.textContent = "";
+  grid.textContent = "";
   $("empty").hidden = files.length > 0;
+
+  // A folder of photos reads better as a grid; anything else as a list.
+  // Only applied until the person picks a view themselves.
+  if (!viewChosen) {
+    const withThumbs = files.filter((f) => f.thumbnail).length;
+    setView(files.length > 0 && withThumbs * 2 >= files.length ? "grid" : "list");
+  } else {
+    setView(view);
+  }
   $("file-count").textContent = files.length === 1
     ? "1 file"
     : `${files.length} files${truncated ? " (list truncated)" : ""}`;
@@ -161,6 +236,7 @@ function renderFiles(truncated) {
   for (const file of files) {
     const node = /** @type {HTMLElement} */ (template.content.firstElementChild?.cloneNode(true));
     /** @type {HTMLElement} */ (node.querySelector(".file-name")).textContent = file.name;
+    fillThumb(/** @type {HTMLElement} */ (node.querySelector(".file-thumb")), file);
 
     const meta = [formatSize(file.size), shortType(file.mime)];
     const folder = multiRoot ? `${file.root}/${file.path}` : file.path;
@@ -181,6 +257,15 @@ function renderFiles(truncated) {
     share.addEventListener("click", () => shareFile(file, share));
 
     list.appendChild(node);
+
+    const cell = /** @type {HTMLElement} */ (cellTemplate.content.firstElementChild?.cloneNode(true));
+    fillThumb(/** @type {HTMLElement} */ (cell.querySelector(".cell-thumb")), file);
+    /** @type {HTMLElement} */ (cell.querySelector(".cell-name")).textContent = file.name;
+    cell.querySelector(".cell-button")?.addEventListener("click", () => {
+      if (file.previewable) openPreview(file);
+      else download.click();
+    });
+    grid.appendChild(cell);
   }
 }
 
@@ -222,6 +307,20 @@ async function openPreview(file) {
     const img = document.createElement("img");
     img.src = url;
     img.alt = file.name;
+    // Safari shows HEIC natively; Chrome and Firefox cannot. When the
+    // original fails to decode, fall back to a server-rendered JPEG. The
+    // Download button still delivers the untouched original.
+    if (file.thumbnail) {
+      img.addEventListener("error", () => {
+        if (img.dataset.fallback) return;
+        img.dataset.fallback = "1";
+        img.src = thumbUrl(file, "large");
+        const note = document.createElement("p");
+        note.className = "hint overlay-note";
+        note.textContent = "Converted preview; Download gives the original file.";
+        body.appendChild(note);
+      }, { once: false });
+    }
     body.appendChild(img);
   } else if (file.mime.startsWith("video/")) {
     const video = document.createElement("video");

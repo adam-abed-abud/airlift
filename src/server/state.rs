@@ -4,6 +4,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::auth::Auth;
 use crate::files::Share;
+use crate::transfer::thumbnail::Thumbnailer;
 use crate::transfer::upload::UploadConfig;
 
 /// Scheme the server is reachable on. Only HTTP exists today, but cookie
@@ -31,6 +32,8 @@ pub struct AppState {
     pub share: Arc<Share>,
     /// `None` means uploads are disabled and the route is not even mounted.
     pub upload: Option<Arc<UploadConfig>>,
+    /// `None` disables thumbnails entirely (`--no-thumbnails`).
+    pub thumbs: Option<Arc<Thumbnailer>>,
     pub scheme: Scheme,
     /// Cancelling this stops the server. Handlers use it for `--once`.
     pub shutdown: CancellationToken,

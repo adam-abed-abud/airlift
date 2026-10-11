@@ -23,6 +23,7 @@ use tracing::{info, warn};
 
 use crate::auth::Auth;
 use crate::files::Share;
+use crate::transfer::thumbnail::Thumbnailer;
 use crate::transfer::upload::UploadConfig;
 pub use state::{AppState, Scheme};
 
@@ -40,7 +41,8 @@ pub fn router(state: AppState) -> Router {
     let mut protected = Router::new()
         .route("/files", get(routes::list_files))
         .route("/files/{id}/download", get(routes::download))
-        .route("/files/{id}/preview", get(routes::preview));
+        .route("/files/{id}/preview", get(routes::preview))
+        .route("/files/{id}/thumb", get(routes::thumbnail));
     if let Some(upload) = &state.upload {
         // The body limit is per request; a multi-file upload shares it.
         // Mounted only when enabled so a read-only share has no write path
@@ -68,7 +70,9 @@ pub fn router(state: AppState) -> Router {
             middleware::same_origin_only,
         ))
         // API responses are per-session and must never be cached or shared.
-        .layer(SetResponseHeaderLayer::overriding(
+        // `if_not_present` so the thumbnail handler can opt in to caching;
+        // every other handler sets nothing and gets no-store.
+        .layer(SetResponseHeaderLayer::if_not_present(
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-store"),
         ));
@@ -88,11 +92,18 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-pub fn state(auth: Auth, share: Share, upload: Option<UploadConfig>, once: bool) -> AppState {
+pub fn state(
+    auth: Auth,
+    share: Share,
+    upload: Option<UploadConfig>,
+    thumbs: Option<Thumbnailer>,
+    once: bool,
+) -> AppState {
     AppState {
         auth: Arc::new(auth),
         share: Arc::new(share),
         upload: upload.map(Arc::new),
+        thumbs: thumbs.map(Arc::new),
         scheme: Scheme::Http,
         shutdown: CancellationToken::new(),
         once,

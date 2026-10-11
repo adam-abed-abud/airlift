@@ -20,6 +20,7 @@ src/
   transfer/       download.rs streaming responses, Range, Content-Disposition
                   range.rs    Range header parsing
                   upload.rs   multipart -> temp file -> rename, sanitising
+                  thumbnail.rs image -> small JPEG; HEIC via external tool; LRU cache
   server/         mod.rs      router assembly, run loop, shutdown
                   routes.rs   handlers
                   middleware.rs require_session, same_origin_only, ClientIp
@@ -47,12 +48,15 @@ POST /api/logout           public   revoke cookie's session
 GET  /api/files                     session   list entries
 GET  /api/files/{id}/download       session   attachment stream, Range
 GET  /api/files/{id}/preview        session   inline stream, Range, media only
+GET  /api/files/{id}/thumb          session   JPEG rendition (?size=small|large), cacheable
 POST /api/upload                    session   multipart, only if --allow-upload
 ```
 
 Middleware order, outermost first: `TraceLayer` → `nosniff` header →
-(`/api` only) `Cache-Control: no-store` → `same_origin_only` (all non-GET)
-→ (`/api/files*`, `/api/upload`) `require_session` → handler.
+(`/api` only) `Cache-Control: no-store` unless the handler set one →
+`same_origin_only` (all non-GET) → (`/api/files*`, `/api/upload`)
+`require_session` → handler. The thumbnail handler is the only one that
+sets its own `Cache-Control`.
 
 `require_session` is a `route_layer`, so unknown `/api` paths return 404,
 not 401: the API cannot be used to discover which routes exist.
@@ -79,6 +83,20 @@ needs. `If-Range` is honoured for ETags (size + mtime), not dates.
 filesystem, so the final `persist_noclobber` is an atomic rename and
 cannot leave a half-written file under the real name. The body limit is
 applied per route so it only affects uploads.
+
+**Thumbnails: pure Rust where possible, a subprocess where not.** The
+`image` crate handles JPEG/PNG/GIF/WebP/BMP/TIFF, including EXIF
+orientation, inside the process. HEIC has no Rust decoder and libheif
+would drag in a C++ toolchain plus libde265 at build time, so instead an
+external program found on `PATH` converts HEIC to JPEG in a private temp
+directory; the source is symlinked there under a fixed name so no tool
+ever parses a user-controlled path (ImageMagick reads `a:b.heic` as a
+coder prefix). Every rendition then goes through the same Rust
+resize/orient/encode step, so output is uniform whichever decoder ran.
+Results are cached in memory, bounded by bytes with LRU eviction, and
+failures are cached too so a corrupt file is not retried on every refresh.
+Decoding runs under a semaphore sized to the CPU count (max 4) so a grid
+of hundreds of photos cannot starve downloads.
 
 **Sessions in memory, never on disk.** "Stop the program, everything is
 revoked" is the simplest guarantee to reason about and matches the

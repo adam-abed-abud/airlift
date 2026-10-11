@@ -43,6 +43,22 @@ async fn main() -> anyhow::Result<()> {
         println!("{qr}");
     }
     let lifetime = cli.command.lifetime();
+    let thumbs = if lifetime.no_thumbnails {
+        None
+    } else {
+        let tool = transfer::thumbnail::HeicTool::detect();
+        match &tool {
+            Some(t) => println!(
+                "Thumbnails: built-in for JPEG/PNG/GIF/WebP, HEIC via {}",
+                t.describe()
+            ),
+            None => println!(
+                "Thumbnails: built-in for JPEG/PNG/GIF/WebP; no HEIC decoder found \
+                 (install ImageMagick with HEIC support, or libheif-examples)"
+            ),
+        }
+        Some(transfer::thumbnail::Thumbnailer::new(tool))
+    };
     if lifetime.once {
         println!("Stops after the first completed transfer (--once)");
     }
@@ -54,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
     }
     println!("Press Ctrl+C to stop");
 
-    let state = server::state(auth, share, upload, lifetime.once);
+    let state = server::state(auth, share, upload, thumbs, lifetime.once);
     server::run(SocketAddr::new(net.bind, net.port), state, lifetime.timeout).await
 }
 

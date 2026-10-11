@@ -3,4 +3,5 @@
 
 pub mod download;
 pub mod range;
+pub mod thumbnail;
 pub mod upload;

@@ -10,6 +10,7 @@ use http_body_util::BodyExt;
 use lanshare::auth::{Auth, pin::Pin};
 use lanshare::files::Share;
 use lanshare::server;
+use lanshare::transfer::thumbnail::{HeicTool, Thumbnailer};
 use lanshare::transfer::upload::UploadConfig;
 use tempfile::TempDir;
 use tower::ServiceExt;
@@ -31,6 +32,10 @@ fn fixture(uploads: bool) -> Fixture {
 }
 
 fn fixture_with(uploads: bool, once: bool) -> Fixture {
+    fixture_full(uploads, once, None)
+}
+
+fn fixture_full(uploads: bool, once: bool, heic_tool: Option<HeicTool>) -> Fixture {
     let share_dir = tempfile::tempdir().unwrap();
     std::fs::write(
         share_dir.path().join("hello.txt"),
@@ -40,6 +45,8 @@ fn fixture_with(uploads: bool, once: bool) -> Fixture {
     std::fs::write(share_dir.path().join("archive.zip"), b"PK\x03\x04").unwrap();
     std::fs::create_dir(share_dir.path().join("sub")).unwrap();
     std::fs::write(share_dir.path().join("sub/clip.mp4"), vec![7u8; 4096]).unwrap();
+    std::fs::write(share_dir.path().join("photo.png"), test_png(800, 400)).unwrap();
+    std::fs::write(share_dir.path().join("IMG_0001.HEIC"), b"not really heic").unwrap();
 
     let upload_dir = uploads.then(|| tempfile::tempdir().unwrap());
     let upload = upload_dir
@@ -48,7 +55,8 @@ fn fixture_with(uploads: bool, once: bool) -> Fixture {
 
     let share = Share::directories(&[share_dir.path().to_path_buf()], false).unwrap();
     let auth = Auth::new(Pin::from_digits(PIN).unwrap());
-    let state = server::state(auth, share, upload, once);
+    let thumbs = Some(Thumbnailer::new(heic_tool));
+    let state = server::state(auth, share, upload, thumbs, once);
     let shutdown = state.shutdown.clone();
     let app = server::router(state);
     Fixture {
@@ -57,6 +65,26 @@ fn fixture_with(uploads: bool, once: bool) -> Fixture {
         upload_dir,
         shutdown,
     }
+}
+
+/// A PNG with a horizontal gradient, generated in-process so tests carry
+/// no binary fixtures.
+fn test_png(width: u32, height: u32) -> Vec<u8> {
+    use image::{DynamicImage, ImageBuffer, Rgb};
+    let img = ImageBuffer::from_fn(width, height, |x, _| Rgb([(x % 256) as u8, 64, 128]));
+    let mut out = Vec::new();
+    DynamicImage::ImageRgb8(img)
+        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+        .unwrap();
+    out
+}
+
+fn jpeg_dimensions(data: &[u8]) -> (u32, u32) {
+    image::ImageReader::new(std::io::Cursor::new(data))
+        .with_guessed_format()
+        .unwrap()
+        .into_dimensions()
+        .unwrap()
 }
 
 async fn send(app: &Router, req: Request<Body>) -> Response {
@@ -173,7 +201,16 @@ async fn listing_download_and_range() {
         .iter()
         .map(|e| e["path"].as_str().unwrap())
         .collect();
-    assert_eq!(names, vec!["archive.zip", "hello.txt", "sub/clip.mp4"]);
+    assert_eq!(
+        names,
+        vec![
+            "IMG_0001.HEIC",
+            "archive.zip",
+            "hello.txt",
+            "photo.png",
+            "sub/clip.mp4"
+        ]
+    );
 
     let id = file_id(&f.app, &cookie, "hello.txt").await;
     let res = send(
@@ -477,4 +514,145 @@ async fn without_once_nothing_stops() {
     )
     .await;
     assert!(!f.shutdown.is_cancelled());
+}
+
+#[tokio::test]
+async fn thumbnails_for_images_with_caching_headers() {
+    let f = fixture(false);
+    let cookie = login(&f.app).await;
+
+    // Listing says which entries can have one; HEIC cannot without a tool.
+    let list = body_json(send(&f.app, get("/api/files", Some(&cookie))).await).await;
+    let flag = |name: &str| {
+        list["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["name"] == name)
+            .unwrap()["thumbnail"]
+            .as_bool()
+            .unwrap()
+    };
+    assert!(flag("photo.png"));
+    assert!(!flag("IMG_0001.HEIC"));
+    assert!(!flag("archive.zip"));
+
+    let id = file_id(&f.app, &cookie, "photo.png").await;
+    assert_eq!(
+        send(&f.app, get(&format!("/api/files/{id}/thumb"), None))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+
+    let res = send(
+        &f.app,
+        get(&format!("/api/files/{id}/thumb"), Some(&cookie)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()[header::CONTENT_TYPE], "image/jpeg");
+    assert_eq!(
+        res.headers()[header::CACHE_CONTROL],
+        "private, max-age=86400"
+    );
+    let etag = res.headers()[header::ETAG].to_str().unwrap().to_string();
+    let jpeg = body_bytes(res).await;
+    assert_eq!(jpeg_dimensions(&jpeg), (320, 160));
+
+    let mut req = get(&format!("/api/files/{id}/thumb"), Some(&cookie));
+    req.headers_mut()
+        .insert(header::IF_NONE_MATCH, etag.parse().unwrap());
+    assert_eq!(send(&f.app, req).await.status(), StatusCode::NOT_MODIFIED);
+
+    let res = send(
+        &f.app,
+        get(&format!("/api/files/{id}/thumb?size=large"), Some(&cookie)),
+    )
+    .await;
+    assert_eq!(jpeg_dimensions(&body_bytes(res).await), (800, 400));
+
+    let zip = file_id(&f.app, &cookie, "archive.zip").await;
+    let res = send(
+        &f.app,
+        get(&format!("/api/files/{zip}/thumb"), Some(&cookie)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    assert_eq!(res.headers()[header::CACHE_CONTROL], "no-store");
+}
+
+/// HEIC goes through an external program. Stand one in with a shell script
+/// that writes a known JPEG wherever it is told to, which exercises the
+/// temp-dir, argument and post-processing path without needing libheif.
+#[cfg(unix)]
+#[tokio::test]
+async fn heic_thumbnail_via_external_tool() {
+    use std::os::unix::fs::PermissionsExt;
+    let tools = tempfile::tempdir().unwrap();
+    let prepared = tools.path().join("prepared.jpg");
+    {
+        use image::{DynamicImage, ImageBuffer, Rgb};
+        let img =
+            ImageBuffer::from_fn(1000, 500, |x, y| Rgb([(x % 256) as u8, (y % 256) as u8, 0]));
+        DynamicImage::ImageRgb8(img).save(&prepared).unwrap();
+    }
+    // Mimics `heif-thumbnail -s SIZE INPUT OUTPUT`: copies the prepared JPEG
+    // to OUTPUT and records INPUT so we can check it was a symlink to the
+    // real file and not the original path.
+    let script = tools.path().join("heif-thumbnail");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\necho \"$3\" > {log}\ncp {prepared} \"$4\"\n",
+            log = tools.path().join("input.log").display(),
+            prepared = prepared.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let f = fixture_full(false, false, HeicTool::from_program(&script));
+    let cookie = login(&f.app).await;
+    let id = file_id(&f.app, &cookie, "IMG_0001.HEIC").await;
+    let list = body_json(send(&f.app, get("/api/files", Some(&cookie))).await).await;
+    assert!(
+        list["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["name"] == "IMG_0001.HEIC" && e["thumbnail"] == true)
+    );
+
+    let res = send(
+        &f.app,
+        get(&format!("/api/files/{id}/thumb"), Some(&cookie)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(jpeg_dimensions(&body_bytes(res).await), (320, 160));
+
+    let seen = std::fs::read_to_string(tools.path().join("input.log")).unwrap();
+    let seen = std::path::Path::new(seen.trim());
+    assert_eq!(seen.file_name().unwrap(), "input.HEIC");
+    assert_ne!(seen, f.share_dir.path().join("IMG_0001.HEIC"));
+}
+
+#[tokio::test]
+async fn thumbnails_can_be_disabled() {
+    let share_dir = tempfile::tempdir().unwrap();
+    std::fs::write(share_dir.path().join("photo.png"), test_png(10, 10)).unwrap();
+    let share = Share::directories(&[share_dir.path().to_path_buf()], false).unwrap();
+    let auth = Auth::new(Pin::from_digits(PIN).unwrap());
+    let app = server::router(server::state(auth, share, None, None, false));
+    let cookie = login(&app).await;
+    let list = body_json(send(&app, get("/api/files", Some(&cookie))).await).await;
+    assert_eq!(list["files"][0]["thumbnail"], false);
+    let id = list["files"][0]["id"].as_str().unwrap();
+    assert_eq!(
+        send(&app, get(&format!("/api/files/{id}/thumb"), Some(&cookie)))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
 }

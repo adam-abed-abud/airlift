@@ -10,7 +10,7 @@ rust-version = "1.85"
 clap = { version = "4.5", features = ["derive"] }
 # HTTP server + async runtime.
 axum = { version = "0.8", features = ["http1", "tokio", "json", "query", "multipart"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "signal", "io-util", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "signal", "io-util", "time", "process", "sync"] }
 # Structured logging. Request/response logging comes from tower-http's TraceLayer later.
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -31,6 +31,9 @@ tokio-util = { version = "0.7", features = ["io"] }
 humantime = "2"
 futures-core = "0.3"
 bytes = "1"
+# Thumbnails for common raster formats, decoded in pure Rust. HEIC is handled
+# by an external tool at runtime (see transfer/thumbnail.rs).
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp", "tiff"] }
 percent-encoding = "2"
 httpdate = "1"
 # Frontend files are compiled into the binary in release builds and read
@@ -46,9 +49,16 @@ thiserror = "2"
 # Drive the router in-process for integration tests.
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+# Tests generate their own PNG fixtures.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 [profile.release]
 # Small, fast single binary is the point of shipping this in Rust.
 lto = true
 codegen-units = 1
 strip = true
+
+# Image decoding is painfully slow unoptimised; keep dev builds usable while
+# leaving our own crate debuggable.
+[profile.dev.package."*"]
+opt-level = 2

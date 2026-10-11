@@ -2,7 +2,7 @@
 //! auth/files/transfer modules and shape the response.
 
 use axum::Json;
-use axum::extract::{Multipart, Path, State};
+use axum::extract::{Multipart, Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,7 @@ use super::state::{AppState, Scheme};
 use crate::auth::{COOKIE_NAME, LoginError, session::MAX_LIFETIME};
 use crate::files::FileEntry;
 use crate::transfer::download::{Disposition, stream_file};
+use crate::transfer::thumbnail::{Size, ThumbError};
 use crate::transfer::upload::{Saved, UploadError};
 
 #[derive(Serialize)]
@@ -125,9 +126,14 @@ pub async fn list_files(State(state): State<AppState>) -> Json<FileList> {
     // Walking the tree is blocking I/O; keep it off the async workers so a
     // slow disk cannot stall the download streams of other clients.
     let share = state.share.clone();
-    let files = tokio::task::spawn_blocking(move || share.list())
+    let mut files = tokio::task::spawn_blocking(move || share.list())
         .await
         .unwrap_or_default();
+    if let Some(thumbs) = &state.thumbs {
+        for f in &mut files {
+            f.thumbnail = thumbs.supports(&f.mime);
+        }
+    }
     let truncated = files.len() >= crate::files::MAX_ENTRIES;
     Json(FileList { files, truncated })
 }
@@ -168,6 +174,71 @@ pub async fn preview(
     }
     // Previews never count as a transfer: watching is not receiving.
     stream_file(&file, &headers, Disposition::Inline, None).await
+}
+
+#[derive(Deserialize)]
+pub struct ThumbQuery {
+    #[serde(default)]
+    size: Option<String>,
+}
+
+/// Small JPEG rendition of an image. Unlike the other file routes this one
+/// is cacheable: the URL carries the file's size and mtime from the
+/// listing, so a changed file gets a new URL and a day of `max-age` is safe.
+pub async fn thumbnail(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(query): Query<ThumbQuery>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let thumbs = state
+        .thumbs
+        .as_ref()
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "thumbnails disabled"))?;
+    let file = state
+        .share
+        .resolve(&id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "no such file"))?;
+    let size = match query.size.as_deref() {
+        Some("large") => Size::Large,
+        _ => Size::Small,
+    };
+    let thumb = thumbs
+        .get(&file.path, &file.mime, size)
+        .await
+        .map_err(|e| {
+            let status = match e {
+                ThumbError::Unsupported | ThumbError::TooLarge => {
+                    StatusCode::UNSUPPORTED_MEDIA_TYPE
+                }
+                ThumbError::Io(_) => StatusCode::NOT_FOUND,
+                ThumbError::Decode(_) | ThumbError::Tool(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            };
+            ApiError::new(status, e.to_string())
+        })?;
+
+    if headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.split(',').any(|t| t.trim() == thumb.etag))
+    {
+        return Ok(StatusCode::NOT_MODIFIED.into_response());
+    }
+    Ok((
+        [
+            (header::CONTENT_TYPE, HeaderValue::from_static("image/jpeg")),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("private, max-age=86400"),
+            ),
+            (
+                header::ETAG,
+                HeaderValue::from_str(&thumb.etag).expect("etag is ASCII"),
+            ),
+        ],
+        thumb.jpeg,
+    )
+        .into_response())
 }
 
 #[derive(Serialize)]

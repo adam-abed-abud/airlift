@@ -72,6 +72,10 @@ pub struct LifetimeOptions {
     /// Exit after this long, e.g. `30m`, `2h`, `1h30m`.
     #[arg(long, value_name = "DURATION", value_parser = humantime::parse_duration)]
     pub timeout: Option<Duration>,
+
+    /// Do not generate image thumbnails (saves CPU on huge photo trees).
+    #[arg(long)]
+    pub no_thumbnails: bool,
 }
 
 /// Options that control where the server listens and which URL is advertised.

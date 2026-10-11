@@ -52,6 +52,8 @@ pub struct FileEntry {
     pub modified: Option<u64>,
     pub mime: String,
     pub previewable: bool,
+    /// Filled in by the server from what the thumbnailer can handle here.
+    pub thumbnail: bool,
 }
 
 /// A file ID resolved back to something the transfer layer can open.
@@ -172,6 +174,7 @@ impl Share {
                 out.push(FileEntry {
                     id,
                     previewable: is_previewable(&mime),
+                    thumbnail: false,
                     mime,
                     name: found.name,
                     path: found.rel.to_string_lossy().into_owned(),

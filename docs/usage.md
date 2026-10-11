@@ -36,6 +36,7 @@ All options work with both commands unless noted.
 | `--include-hidden` | off | `serve` only: list dot-files too. |
 | `--once` | off | Exit after the first completed transfer: a download that reached the end of the file, or an upload request that saved at least one file. Previews do not count. |
 | `--timeout <DURATION>` | none | Exit after this long, e.g. `30m`, `2h`, `1h30m`. |
+| `--no-thumbnails` | off | Skip image thumbnails. Useful on very large photo trees or slow machines. |
 | `-v`, `-vv` | | Debug / trace logging. `RUST_LOG` is honoured when no `-v` is given. |
 
 ## What the terminal shows
@@ -75,6 +76,33 @@ Every login and download is logged with the client's IP.
    (Ctrl+C) ends every session at once.
 
 Sessions expire after 2 hours of inactivity and after 12 hours regardless.
+
+## Thumbnails
+
+Image files get a thumbnail in the list and a grid view, which is chosen
+automatically when at least half of the shared files are images. The
+choice is remembered per device.
+
+- JPEG, PNG, GIF, WebP, BMP and TIFF are decoded by LANShare itself.
+  EXIF orientation is applied, so phone photos are not sideways.
+- HEIC/HEIF (iPhone photos) need an external decoder. At start-up LANShare
+  looks on `PATH` for, in order: `magick` (ImageMagick 7 built with
+  libheif), `heif-thumbnail` or `heif-convert` (package `libheif-examples`
+  on Debian/Ubuntu), `vipsthumbnail`, `sips` (built into macOS), and
+  finally `convert` (ImageMagick 6). The terminal reports which one is
+  used, or that none was found. Set `LANSHARE_HEIC_TOOL=/path/to/program`
+  to force a specific one.
+- Without a decoder, HEIC files show a type badge instead and can still be
+  downloaded and, on Safari, previewed.
+- Thumbnails are generated on demand, at most a few at a time, and cached
+  in memory (64 MB) for the lifetime of the run. The browser caches them
+  for a day; a changed file gets a new URL automatically.
+- Files above 256 MB are not thumbnailed.
+
+The preview overlay also uses this machinery as a fallback: when the
+browser cannot display the original (HEIC in Chrome or Firefox, TIFF), a
+converted 1600 px rendition is shown with a note. The Download button
+always delivers the untouched original.
 
 ## Uploads in detail
 

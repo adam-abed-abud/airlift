@@ -136,6 +136,77 @@ input[type="text"] {
 
 .file-main { flex: 1 1 200px; min-width: 0; }
 
+/* Thumbnail or type badge at the start of a row / in a grid cell. */
+.file-thumb {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.file-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.toolbar-actions { display: flex; gap: 8px; align-items: center; }
+
+.segmented { display: inline-flex; }
+.segmented .btn { border-radius: 0; padding: 10px 12px; }
+.segmented .btn:first-child { border-radius: 10px 0 0 10px; }
+.segmented .btn:last-child { border-radius: 0 10px 10px 0; margin-left: -1px; }
+.segmented .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+.file-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
+}
+
+.cell-button {
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+}
+
+.cell-thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 0;
+  flex: none;
+}
+
+.cell-name {
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .file-name { font-weight: 600; word-break: break-word; }
 
 .file-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -199,6 +270,9 @@ input[type="text"] {
 .overlay-body iframe { width: 100%; height: 100%; border: 0; background: #fff; }
 
 .overlay-body audio { width: 90%; }
+
+.overlay-body { flex-wrap: wrap; }
+.overlay-note { width: 100%; text-align: center; padding: 8px; color: #ccc; }
 
 .overlay-body pre {
   align-self: flex-start;

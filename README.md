@@ -21,6 +21,8 @@ Press Ctrl+C to stop
   resumable downloads). Original bytes and filenames are preserved.
 - Optional uploads *to* your computer from the iPhone/iPad Photos app or
   Files, behind an explicit flag.
+- Photo grid with thumbnails, including HEIC when ImageMagick or libheif's
+  tools are installed.
 
 ## Install
 

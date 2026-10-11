@@ -3,7 +3,9 @@
 ## Build and test
 
 ```bash
-cargo build                 # debug: frontend read from web/ at request time
+cargo build                 # debug: frontend read from web/ at request time;
+                            # dependencies are built with opt-level 2 so image
+                            # decoding is not glacial in dev
 cargo build --release       # frontend embedded; ~3 MB binary, LTO, stripped
 cargo test                  # unit tests + tests/api.rs through the router
 cargo clippy --all-targets
@@ -45,7 +47,8 @@ e.g. `RUST_LOG=lanshare=debug`. Access codes are printed, never logged.
 ## Roadmap
 
 Implemented (v0.1): everything under "Essential MVP" in
-`lanshare_project_notes.md`, plus `--once` and `--timeout`.
+`lanshare_project_notes.md`, plus `--once`, `--timeout` and image
+thumbnails with a grid view (HEIC through an external tool).
 
 Planned, roughly in order:
 
@@ -56,7 +59,10 @@ Planned, roughly in order:
 4. Push mode: CLI announces a new file to an open page.
 5. Clipboard/text snippets.
 6. Connected-device view and optional per-device approval.
-7. Release builds for macOS, Windows and Raspberry Pi.
+7. Video thumbnails (first frame via `ffmpeg`, same external-tool pattern).
+8. Optional native HEIC decoding behind a cargo feature (libheif +
+   libde265) for machines without ImageMagick.
+9. Release builds for macOS, Windows and Raspberry Pi.
 
 ## Conventions
 
