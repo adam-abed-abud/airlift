@@ -4,7 +4,7 @@
 use std::net::SocketAddr;
 
 use clap::Parser;
-use lanshare::{auth, cli, files, server, transfer, utils};
+use airlift::{auth, cli, files, server, transfer, utils};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -79,7 +79,7 @@ fn print_banner(
     println!();
     println!(
         "  {}  {}  sharing {what}",
-        bold("LANShare"),
+        bold("Airlift"),
         dim(env!("CARGO_PKG_VERSION"))
     );
     for root in share.roots() {

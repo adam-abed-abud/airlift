@@ -24,9 +24,9 @@ pub const MAX_DEPTH: usize = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RootKind {
-    /// `lanshare send FILE`: the root *is* the file.
+    /// `airlift send FILE`: the root *is* the file.
     File,
-    /// `lanshare serve DIR`: everything underneath is listed.
+    /// `airlift serve DIR`: everything underneath is listed.
     Dir,
 }
 
@@ -246,7 +246,7 @@ mod tests {
     use std::fs;
 
     fn tmp() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("lanshare-test-{}", fresh_id()));
+        let dir = std::env::temp_dir().join(format!("airlift-test-{}", fresh_id()));
         fs::create_dir_all(&dir).unwrap();
         dir
     }

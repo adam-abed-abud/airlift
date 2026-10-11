@@ -11,7 +11,7 @@ use std::time::Duration;
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[command(name = "lanshare", version, about, long_about = None)]
+#[command(name = "airlift", version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,

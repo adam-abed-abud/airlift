@@ -1,5 +1,5 @@
 {
-  description = "LANShare: temporary, PIN-protected LAN file sharing from the terminal to any browser";
+  description = "Airlift: temporary, PIN-protected LAN file sharing from the terminal to any browser";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -16,21 +16,21 @@
     in
     {
       overlays.default = final: prev: {
-        lanshare = final.callPackage ./nix/package.nix { };
+        airlift = final.callPackage ./nix/package.nix { };
       };
 
       packages = forAll (pkgs: rec {
-        lanshare = pkgs.callPackage ./nix/package.nix { };
+        airlift = pkgs.callPackage ./nix/package.nix { };
         # Same binary without ImageMagick/ffmpeg on its PATH: smaller
         # closure, HEIC and video thumbnails only if the system has tools.
-        lanshare-minimal = lanshare.override { withThumbnailTools = false; };
-        default = lanshare;
+        airlift-minimal = airlift.override { withThumbnailTools = false; };
+        default = airlift;
       });
 
       apps = forAll (pkgs: {
         default = {
           type = "app";
-          program = "${self.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/lanshare";
+          program = "${self.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/airlift";
           meta.description = "Share files on the LAN: nix run .# -- send movie.mp4";
         };
       });

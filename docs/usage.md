@@ -2,12 +2,12 @@
 
 ## Commands
 
-### `lanshare send <FILE>`
+### `airlift send <FILE>`
 
 Shares exactly one file. The page lists that file with a Download button
 (and Preview if it is an image, video, audio file, PDF or text).
 
-### `lanshare serve <DIR>...`
+### `airlift serve <DIR>...`
 
 Shares one or more directories. Every regular file underneath is listed
 with its relative path, up to 16 levels deep and 10 000 entries. The list
@@ -42,7 +42,7 @@ All options work with both commands unless noted.
 ## What the terminal shows
 
 ```text
-  LANShare  0.1.0  sharing Videos (12 files, 3.4 GB)
+  Airlift  0.1.0  sharing Videos (12 files, 3.4 GB)
   /home/adam/Videos
 
   URL    http://192.168.1.105:8080
@@ -106,20 +106,20 @@ the on-screen arrows or the keyboard arrows. On a desktop browser, files
 dragged onto the page are uploaded when uploads are enabled, and the
 upload panel keeps a strip of what was received in this session.
 
-- JPEG, PNG, GIF, WebP, BMP and TIFF are decoded by LANShare itself.
+- JPEG, PNG, GIF, WebP, BMP and TIFF are decoded by Airlift itself.
   EXIF orientation is applied, so phone photos are not sideways.
-- HEIC/HEIF (iPhone photos) need an external decoder. At start-up LANShare
+- HEIC/HEIF (iPhone photos) need an external decoder. At start-up Airlift
   looks on `PATH` for, in order: `magick` (ImageMagick 7 built with
   libheif), `heif-thumbnail` or `heif-convert` (package `libheif-examples`
   on Debian/Ubuntu), `vipsthumbnail`, `sips` (built into macOS), and
   finally `convert` (ImageMagick 6). The terminal reports which one is
-  used, or that none was found. Set `LANSHARE_HEIC_TOOL=/path/to/program`
+  used, or that none was found. Set `AIRLIFT_HEIC_TOOL=/path/to/program`
   to force a specific one.
 - Without a decoder, HEIC files show a type badge instead and can still be
   downloaded and, on Safari, previewed.
 - Videos get a frame thumbnail (one second in, or the first frame for
   shorter clips) when `ffmpeg` or GStreamer's `gst-launch-1.0` is on
-  `PATH`. `LANSHARE_VIDEO_TOOL=/path/to/program` forces one. Phone
+  `PATH`. `AIRLIFT_VIDEO_TOOL=/path/to/program` forces one. Phone
   recordings are rotated correctly by both tools.
 - Thumbnails are generated on demand, at most a few at a time, and cached
   in memory (64 MB) for the lifetime of the run. The browser caches them
@@ -138,7 +138,7 @@ always delivers the untouched original.
   never hidden files. Unicode (including emoji) is preserved.
 - An existing file is never overwritten: `photo.heic` becomes
   `photo (1).heic`, then `photo (2).heic`, and so on.
-- Each file is written to a hidden `.lanshare-*.part` temp file in the
+- Each file is written to a hidden `.airlift-*.part` temp file in the
   destination and renamed into place when complete. A cancelled or failed
   upload leaves nothing behind.
 - Before accepting, free disk space is checked against the request size,

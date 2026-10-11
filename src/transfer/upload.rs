@@ -58,7 +58,7 @@ impl UploadConfig {
         }
         // Fail at start-up rather than on the first upload from the iPad.
         let probe = tempfile::Builder::new()
-            .prefix(".lanshare-probe-")
+            .prefix(".airlift-probe-")
             .tempfile_in(&dir)
             .map_err(|e| {
                 anyhow::anyhow!("upload directory {} is not writable: {e}", dir.display())
@@ -90,7 +90,7 @@ impl UploadConfig {
         let name = sanitize_filename(&original);
 
         let mut builder = tempfile::Builder::new();
-        builder.prefix(".lanshare-").suffix(".part");
+        builder.prefix(".airlift-").suffix(".part");
         // Temp files default to 0600, which would make every received photo
         // private to this user. Ask for ordinary file permissions instead;
         // the umask still applies, so this behaves like any saved file.

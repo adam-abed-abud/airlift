@@ -1,7 +1,7 @@
 //! Serving the embedded frontend.
 //!
 //! `rust-embed` compiles `web/` into the binary for release builds, which is
-//! what makes LANShare a single file to copy around. In debug builds it
+//! what makes Airlift a single file to copy around. In debug builds it
 //! reads from disk on every request so UI edits show up with a reload.
 
 use axum::http::{HeaderValue, StatusCode, Uri, header};

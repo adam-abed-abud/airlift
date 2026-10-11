@@ -22,7 +22,7 @@ use throttle::{FailureOutcome, Throttle};
 
 /// Name of the session cookie. Prefixed so it cannot be confused with
 /// anything else a browser might hold for this IP:port.
-pub const COOKIE_NAME: &str = "lanshare_session";
+pub const COOKIE_NAME: &str = "airlift_session";
 
 /// Everything the server needs to decide whether a request is allowed.
 pub struct Auth {

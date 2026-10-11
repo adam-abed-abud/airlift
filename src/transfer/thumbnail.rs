@@ -120,11 +120,11 @@ pub struct HeicTool {
 }
 
 impl HeicTool {
-    /// Pick a tool. `LANSHARE_HEIC_TOOL` forces a specific program (the
+    /// Pick a tool. `AIRLIFT_HEIC_TOOL` forces a specific program (the
     /// kind is inferred from its file name); otherwise `PATH` is searched
     /// in order of preference.
     pub fn detect() -> Option<Self> {
-        if let Some(forced) = std::env::var_os("LANSHARE_HEIC_TOOL") {
+        if let Some(forced) = std::env::var_os("AIRLIFT_HEIC_TOOL") {
             return Self::from_program(PathBuf::from(forced));
         }
         // `convert` last and never on Windows, where it is a disk utility.
@@ -236,7 +236,7 @@ async fn run_in_tempdir(
     build: impl FnOnce(&Path, &Path) -> tokio::process::Command,
 ) -> Result<Vec<u8>, ThumbError> {
     let dir = tempfile::Builder::new()
-        .prefix("lanshare-thumb-")
+        .prefix("airlift-thumb-")
         .tempdir()
         .map_err(|e| ThumbError::Io(e.to_string()))?;
     let ext = source
@@ -291,10 +291,10 @@ pub struct VideoTool {
 }
 
 impl VideoTool {
-    /// `LANSHARE_VIDEO_TOOL` forces a program; otherwise ffmpeg is preferred
+    /// `AIRLIFT_VIDEO_TOOL` forces a program; otherwise ffmpeg is preferred
     /// and GStreamer's launcher is the fallback.
     pub fn detect() -> Option<Self> {
-        if let Some(forced) = std::env::var_os("LANSHARE_VIDEO_TOOL") {
+        if let Some(forced) = std::env::var_os("AIRLIFT_VIDEO_TOOL") {
             return Self::from_program(PathBuf::from(forced));
         }
         ["ffmpeg", "gst-launch-1.0"].iter().find_map(|name| {

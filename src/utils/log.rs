@@ -9,8 +9,8 @@ use tracing_subscriber::EnvFilter;
 /// fine-grained filtering when no flag is given.
 pub fn init(verbosity: u8) {
     let default = match verbosity {
-        0 => "lanshare=warn,tower_http=warn",
-        1 => "lanshare=debug,tower_http=debug",
+        0 => "airlift=warn,tower_http=warn",
+        1 => "airlift=debug,tower_http=debug",
         _ => "trace",
     };
     let filter = if verbosity == 0 {

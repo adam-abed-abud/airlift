@@ -1,6 +1,6 @@
 # Security model
 
-LANShare is a convenience tool for moving files between your own devices
+Airlift is a convenience tool for moving files between your own devices
 on a network you trust. This page states exactly what it protects against,
 what it does not, and how.
 
@@ -23,7 +23,7 @@ what it does not, and how.
 - Anyone who can sniff traffic on the network: plain HTTP carries the
   code, the session cookie and the file contents in the clear.
 - A hostile device that has already obtained a valid session.
-- Exposure to the Internet. LANShare never sets up port forwarding or UPnP;
+- Exposure to the Internet. Airlift never sets up port forwarding or UPnP;
   if you forward the port yourself, the PIN is not a sufficient defence.
 
 The page footer says "Unencrypted HTTP: use only on networks you trust"
@@ -120,5 +120,5 @@ version:
 
 The code already carries a `Scheme` through the server state so cookie
 flags and origin checks switch correctly once TLS lands. Until then, treat
-LANShare as a trusted-network tool. Note that HTTPS would also unlock the
+Airlift as a trusted-network tool. Note that HTTPS would also unlock the
 Web Share API in Safari (see [ios.md](ios.md)).

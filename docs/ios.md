@@ -1,6 +1,6 @@
 # iPad and iPhone notes
 
-LANShare's web page is designed around how Safari on iOS/iPadOS behaves.
+Airlift's web page is designed around how Safari on iOS/iPadOS behaves.
 This page explains what to expect and why some things work the way they do.
 
 ## Downloading

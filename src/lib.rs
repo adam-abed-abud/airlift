@@ -1,4 +1,4 @@
-//! LANShare: temporary, PIN-protected file sharing over the local network.
+//! Airlift: temporary, PIN-protected file sharing over the local network.
 //!
 //! The crate is a library plus a thin binary so integration tests can build
 //! the router and drive it in-process without opening a socket.

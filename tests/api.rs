@@ -7,11 +7,11 @@ use axum::body::{Body, Bytes};
 use axum::http::{Request, StatusCode, header};
 use axum::response::Response;
 use http_body_util::BodyExt;
-use lanshare::auth::{Auth, pin::Pin};
-use lanshare::files::Share;
-use lanshare::server;
-use lanshare::transfer::thumbnail::{HeicTool, Thumbnailer, VideoTool};
-use lanshare::transfer::upload::UploadConfig;
+use airlift::auth::{Auth, pin::Pin};
+use airlift::files::Share;
+use airlift::server;
+use airlift::transfer::thumbnail::{HeicTool, Thumbnailer, VideoTool};
+use airlift::transfer::upload::UploadConfig;
 use tempfile::TempDir;
 use tower::ServiceExt;
 
@@ -168,7 +168,7 @@ async fn status_is_public_and_files_are_not() {
         let res = send(&f.app, get(path, None)).await;
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "{path}");
     }
-    let res = send(&f.app, get("/api/files", Some("lanshare_session=forged"))).await;
+    let res = send(&f.app, get("/api/files", Some("airlift_session=forged"))).await;
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
 
@@ -325,7 +325,7 @@ async fn logout_revokes_session() {
 }
 
 fn multipart(parts: &[(&str, &[u8])]) -> (String, Vec<u8>) {
-    let boundary = "----lanshare-test-boundary";
+    let boundary = "----airlift-test-boundary";
     let mut body = Vec::new();
     for (filename, data) in parts {
         body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());

@@ -1,5 +1,5 @@
 [package]
-name = "lanshare"
+name = "airlift"
 version = "0.1.0"
 edition = "2024"
 description = "Temporary, PIN-protected LAN file sharing from the terminal to any browser"

@@ -1,5 +1,5 @@
 // @ts-check
-// LANShare frontend. Plain JavaScript with JSDoc types so it runs from the
+// Airlift frontend. Plain JavaScript with JSDoc types so it runs from the
 // embedded file with no build step, yet can be type-checked with `tsc`.
 //
 // Design rules that matter on iOS Safari:
@@ -87,11 +87,11 @@ async function init() {
     return;
   }
   if (status) {
-    const name = status.share_name || "LANShare";
+    const name = status.share_name || "Airlift";
     $("share-name").textContent = name;
     $("splash-name").textContent = name;
     $("splash-host").textContent = status.host_name ? `shared from ${status.host_name}` : "";
-    document.title = `${name} – LANShare`;
+    document.title = `${name} – Airlift`;
   }
   if (status && status.authenticated) showFiles();
   else showLogin();
@@ -155,7 +155,7 @@ let files = [];
 let view = "list";
 let viewChosen = false;
 try {
-  const saved = localStorage.getItem("lanshare-view");
+  const saved = localStorage.getItem("airlift-view");
   if (saved === "list" || saved === "grid") { view = saved; viewChosen = true; }
 } catch (_) { /* private mode or storage disabled: default stays */ }
 
@@ -214,7 +214,7 @@ $("view-grid").addEventListener("click", () => { viewChosen = true; remember("gr
 
 /** @param {"list" | "grid"} v */
 function remember(v) {
-  try { localStorage.setItem("lanshare-view", v); } catch (_) { /* fine without */ }
+  try { localStorage.setItem("airlift-view", v); } catch (_) { /* fine without */ }
 }
 
 async function loadFiles() {
@@ -255,7 +255,7 @@ let visibleFiles = [];
 let lastTruncated = false;
 
 try {
-  const savedSort = localStorage.getItem("lanshare-sort");
+  const savedSort = localStorage.getItem("airlift-sort");
   if (savedSort === "name" || savedSort === "newest" || savedSort === "largest") sort = savedSort;
 } catch (_) { /* default */ }
 /** @type {HTMLSelectElement} */ ($("sort")).value = sort;
@@ -442,7 +442,7 @@ $("search").addEventListener("input", (e) => {
 
 $("sort").addEventListener("change", (e) => {
   sort = /** @type {Sort} */ (/** @type {HTMLSelectElement} */ (e.currentTarget).value);
-  try { localStorage.setItem("lanshare-sort", sort); } catch (_) { /* fine */ }
+  try { localStorage.setItem("airlift-sort", sort); } catch (_) { /* fine */ }
   renderFiles(lastTruncated);
 });
 

@@ -1,4 +1,4 @@
-# LANShare as a Nix package.
+# Airlift as a Nix package.
 #
 # The binary itself has no runtime dependencies. HEIC and video thumbnails
 # come from external tools found on PATH (see docs/usage.md), so by default
@@ -38,13 +38,13 @@ rustPlatform.buildRustPackage {
   nativeBuildInputs = [ makeWrapper ];
 
   postInstall = lib.optionalString withThumbnailTools ''
-    wrapProgram $out/bin/lanshare \
+    wrapProgram $out/bin/airlift \
       --prefix PATH : ${lib.makeBinPath [ imagemagick ffmpeg-headless ]}
   '';
 
   meta = {
     description = manifest.description;
-    mainProgram = "lanshare";
+    mainProgram = "airlift";
     platforms = lib.platforms.unix;
   };
 }

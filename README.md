@@ -1,12 +1,12 @@
-# LANShare
+# Airlift
 
 Send a file from your computer to an iPad, phone or any other device on the
 same Wi-Fi, with nothing to install on the receiving side: run one command,
 scan the QR code, type the access code, tap **Download**.
 
 ```text
-$ lanshare send movie.mp4
-LANShare
+$ airlift send movie.mp4
+Airlift
 Sharing: /home/adam/Videos/movie.mp4
 URL: http://192.168.1.105:8080
 Access code: 482-913
@@ -31,7 +31,7 @@ Press Ctrl+C to stop
 With Cargo (needs a Rust toolchain, 1.85 or newer):
 
 ```bash
-cargo install --path .        # or: cargo build --release && cp target/release/lanshare ~/.local/bin/
+cargo install --path .        # or: cargo build --release && cp target/release/airlift ~/.local/bin/
 ```
 
 With Nix (flakes), which also brings ImageMagick and ffmpeg for HEIC and
@@ -45,19 +45,19 @@ nix profile install .#                 # install into your profile
 ## Use
 
 ```bash
-lanshare send movie.mp4                      # share one file
-lanshare serve ~/Videos                      # share a folder (recursively)
-lanshare serve ~/Videos ~/Pictures           # several folders
-lanshare serve ~/Downloads --allow-upload    # also accept files from the device
-lanshare send movie.mp4 --once               # exit after the download completes
-lanshare serve ~/Videos --timeout 30m        # exit after 30 minutes
-lanshare send report.pdf --port 9000         # different port
+airlift send movie.mp4                      # share one file
+airlift serve ~/Videos                      # share a folder (recursively)
+airlift serve ~/Videos ~/Pictures           # several folders
+airlift serve ~/Downloads --allow-upload    # also accept files from the device
+airlift send movie.mp4 --once               # exit after the download completes
+airlift serve ~/Videos --timeout 30m        # exit after 30 minutes
+airlift send report.pdf --port 9000         # different port
 ```
 
 Open the URL on the other device (or scan the QR code), enter the code, then
 **Download** saves to the Files app, **Preview** plays or shows it inline.
 
-Run `lanshare --help` or see [docs/usage.md](docs/usage.md) for all options.
+Run `airlift --help` or see [docs/usage.md](docs/usage.md) for all options.
 
 ## Security in one paragraph
 

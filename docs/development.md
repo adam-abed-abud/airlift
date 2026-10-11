@@ -26,16 +26,16 @@ npx tsc --noEmit --allowJs --checkJs --target es2020 --lib dom,es2020 web/app.js
 
 `flake.nix` exposes:
 
-- `packages.default` (also `lanshare`): the binary, wrapped so ImageMagick
+- `packages.default` (also `airlift`): the binary, wrapped so ImageMagick
   and `ffmpeg` from nixpkgs are on its `PATH`. HEIC and video thumbnails
   therefore work out of the box.
-- `packages.lanshare-minimal`: the same binary without the wrapper, for a
+- `packages.airlift-minimal`: the same binary without the wrapper, for a
   small closure; thumbnails for HEIC and video then depend on what the
   system has.
 - `apps.default`: `nix run .# -- serve ~/Videos`.
 - `devShells.default`: cargo, rustc, clippy, rustfmt, rust-analyzer and
   the two tools, for `nix develop`.
-- `overlays.default`: adds `pkgs.lanshare` for use in a NixOS or
+- `overlays.default`: adds `pkgs.airlift` for use in a NixOS or
   home-manager configuration.
 
 The derivation lives in `nix/package.nix` and uses `cargoLock.lockFile`,
@@ -45,8 +45,8 @@ after `cargo update`. The build runs the test suite in the sandbox.
 To use it from another flake:
 
 ```nix
-inputs.lanshare.url = "github:<you>/lanshare";
-# then: inputs.lanshare.packages.${system}.default
+inputs.airlift.url = "github:<you>/airlift";
+# then: inputs.airlift.packages.${system}.default
 ```
 
 ## Manual smoke test
@@ -75,7 +75,7 @@ Two channels, on purpose:
 - **stderr**: `tracing` diagnostics. Warnings and errors by default; `-v`
   enables debug including one line per request from `tower_http`; `-vv`
   enables trace. Without `-v`, `RUST_LOG` is honoured, e.g.
-  `RUST_LOG=lanshare=debug`.
+  `RUST_LOG=airlift=debug`.
 
 Access codes appear in the feed, never in logs. The device label in the
 feed is sent by the page at login (`deviceName()` in `app.js`), because
@@ -85,7 +85,7 @@ tell the two apart.
 ## Roadmap
 
 Implemented (v0.1): everything under "Essential MVP" in
-`lanshare_project_notes.md`, plus `--once`, `--timeout`, image and video
+`airlift_project_notes.md`, plus `--once`, `--timeout`, image and video
 thumbnails with a grid view (HEIC and video through external tools),
 folder grouping, sort/filter/search, a swipeable preview, drag-and-drop
 uploads and a terminal activity feed.

@@ -18,6 +18,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "airlift"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bytes",
+ "chrono",
+ "clap",
+ "fs4",
+ "futures-core",
+ "gethostname",
+ "getrandom",
+ "http-body-util",
+ "httpdate",
+ "humantime",
+ "image",
+ "mime_guess",
+ "percent-encoding",
+ "qrcode",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "subtle",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "walkdir",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -643,41 +678,6 @@ dependencies = [
  "cfg-if",
  "futures-util",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "lanshare"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "bytes",
- "chrono",
- "clap",
- "fs4",
- "futures-core",
- "gethostname",
- "getrandom",
- "http-body-util",
- "httpdate",
- "humantime",
- "image",
- "mime_guess",
- "percent-encoding",
- "qrcode",
- "rust-embed",
- "serde",
- "serde_json",
- "subtle",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-util",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "walkdir",
 ]
 
 [[package]]
