@@ -59,7 +59,6 @@ impl SessionStore {
     pub fn revoke(&self, token: &str) {
         self.sessions.lock().unwrap().remove(token);
     }
-
 }
 
 fn is_live(s: &Session, now: Instant) -> bool {

@@ -11,8 +11,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use axum::http::{HeaderValue, StatusCode, header};
 use axum::extract::DefaultBodyLimit;
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::routing::{get, post};
 use axum::{Router, middleware as axum_mw};
 use tokio::net::TcpListener;
@@ -50,9 +50,9 @@ pub fn router(state: AppState) -> Router {
         );
     }
     let protected = protected.route_layer(axum_mw::from_fn_with_state(
-            state.clone(),
-            middleware::require_session,
-        ));
+        state.clone(),
+        middleware::require_session,
+    ));
 
     let api = Router::new()
         .route("/status", get(routes::status))
@@ -74,8 +74,11 @@ pub fn router(state: AppState) -> Router {
 
     Router::new()
         .route("/", get(assets::index))
-        .route("/{*path}", get(assets::asset))
         .nest("/api", api)
+        // Static assets are the fallback rather than a `/{*path}` route: a
+        // catch-all route would also claim unknown /api paths and answer
+        // 405 for POSTs, whereas the nested fallback above returns 404.
+        .fallback(get(assets::asset))
         .layer(SetResponseHeaderLayer::if_not_present(
             header::X_CONTENT_TYPE_OPTIONS,
             HeaderValue::from_static("nosniff"),
@@ -120,7 +123,9 @@ pub async fn run(addr: SocketAddr, state: AppState) -> anyhow::Result<()> {
     let _ = stop_tx.send(());
 
     match tokio::time::timeout(SHUTDOWN_GRACE, server).await {
-        Ok(joined) => joined.context("server task panicked")?.context("server error")?,
+        Ok(joined) => joined
+            .context("server task panicked")?
+            .context("server error")?,
         Err(_) => warn!("in-flight transfers did not finish in time; exiting anyway"),
     }
     Ok(())

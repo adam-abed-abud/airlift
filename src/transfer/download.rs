@@ -56,9 +56,13 @@ pub async fn stream_file(
     headers.insert(header::ETAG, HeaderValue::from_str(&etag).unwrap());
     headers.insert(
         header::CONTENT_TYPE,
-        HeaderValue::from_str(&file.mime).unwrap_or(HeaderValue::from_static("application/octet-stream")),
+        HeaderValue::from_str(&file.mime)
+            .unwrap_or(HeaderValue::from_static("application/octet-stream")),
     );
-    headers.insert(header::CONTENT_DISPOSITION, content_disposition(disposition, &file.name));
+    headers.insert(
+        header::CONTENT_DISPOSITION,
+        content_disposition(disposition, &file.name),
+    );
     if let Some(lm) = last_modified(&meta) {
         headers.insert(header::LAST_MODIFIED, lm);
     }
@@ -70,7 +74,7 @@ pub async fn stream_file(
                 header::CONTENT_RANGE,
                 HeaderValue::from_str(&format!("bytes {}-{}/{}", r.start, r.end, size)).unwrap(),
             );
-            (StatusCode::PARTIAL_CONTENT, r.start, r.len())
+            (StatusCode::PARTIAL_CONTENT, r.start, r.byte_count())
         }
         RangeOutcome::Unsatisfiable => {
             headers.insert(
@@ -145,7 +149,13 @@ pub fn content_disposition(disposition: Disposition, name: &str) -> HeaderValue 
     };
     let ascii: String = name
         .chars()
-        .map(|c| if c.is_ascii() && !c.is_ascii_control() && c != '"' && c != '\\' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii() && !c.is_ascii_control() && c != '"' && c != '\\' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     let encoded = utf8_percent_encode(name, ATTR_CHAR_ENCODE);
     let value = format!("{kind}; filename=\"{ascii}\"; filename*=UTF-8''{encoded}");
@@ -164,6 +174,9 @@ mod tests {
             "attachment; filename=\"F__e _x_.mov\"; filename*=UTF-8''F%C3%BC%C3%9Fe%20%22x%22.mov"
         );
         let v = content_disposition(Disposition::Inline, "plain.pdf");
-        assert_eq!(v.to_str().unwrap(), "inline; filename=\"plain.pdf\"; filename*=UTF-8''plain.pdf");
+        assert_eq!(
+            v.to_str().unwrap(),
+            "inline; filename=\"plain.pdf\"; filename*=UTF-8''plain.pdf"
+        );
     }
 }

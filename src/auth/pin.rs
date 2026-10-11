@@ -25,11 +25,10 @@ impl Pin {
         }
     }
 
-    /// Construct from a known value. Only used by tests.
-    #[cfg(test)]
-    pub fn from_str(s: &str) -> Self {
-        assert_eq!(s.len(), PIN_DIGITS);
-        Pin(s.to_string())
+    /// Construct from a known value. Exists for tests; the binary never
+    /// accepts a configured code on purpose.
+    pub fn from_digits(s: &str) -> Option<Self> {
+        (s.len() == PIN_DIGITS && s.bytes().all(|b| b.is_ascii_digit())).then(|| Pin(s.to_string()))
     }
 
     /// Human-friendly form, e.g. `482-913`. The dash is only a reading aid;
@@ -64,7 +63,7 @@ mod tests {
 
     #[test]
     fn verify_ignores_formatting() {
-        let pin = Pin::from_str("482913");
+        let pin = Pin::from_digits("482913").unwrap();
         assert!(pin.verify("482913"));
         assert!(pin.verify("482-913"));
         assert!(pin.verify(" 482 913 "));
@@ -75,6 +74,6 @@ mod tests {
 
     #[test]
     fn display_inserts_dash() {
-        assert_eq!(Pin::from_str("000123").display(), "000-123");
+        assert_eq!(Pin::from_digits("000123").unwrap().display(), "000-123");
     }
 }

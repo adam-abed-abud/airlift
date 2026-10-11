@@ -93,7 +93,11 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Respon
 /// as the server speaks HTTPS. `Max-Age` matches the server-side cap so the
 /// browser forgets the cookie around the time it stops working anyway.
 fn session_cookie(token: &str, scheme: Scheme) -> HeaderValue {
-    let secure = if scheme == Scheme::Https { "; Secure" } else { "" };
+    let secure = if scheme == Scheme::Https {
+        "; Secure"
+    } else {
+        ""
+    };
     let value = format!(
         "{COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={}{secure}",
         MAX_LIFETIME.as_secs()
@@ -102,7 +106,11 @@ fn session_cookie(token: &str, scheme: Scheme) -> HeaderValue {
 }
 
 fn clear_cookie(scheme: Scheme) -> HeaderValue {
-    let secure = if scheme == Scheme::Https { "; Secure" } else { "" };
+    let secure = if scheme == Scheme::Https {
+        "; Secure"
+    } else {
+        ""
+    };
     let value = format!("{COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0{secure}");
     HeaderValue::from_str(&value).expect("cookie is ASCII")
 }
@@ -147,7 +155,10 @@ pub async fn preview(
         .resolve(&id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "no such file"))?;
     if !crate::files::is_previewable(&file.mime) {
-        return Err(ApiError::new(StatusCode::UNSUPPORTED_MEDIA_TYPE, "no preview for this type"));
+        return Err(ApiError::new(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "no preview for this type",
+        ));
     }
     stream_file(&file, &headers, Disposition::Inline).await
 }
@@ -182,7 +193,10 @@ pub async fn upload(
         .and_then(|v| v.parse::<u64>().ok());
     config.check_space(declared).map_err(upload_error)?;
 
-    let mut outcome = UploadOutcome { saved: Vec::new(), failed: Vec::new() };
+    let mut outcome = UploadOutcome {
+        saved: Vec::new(),
+        failed: Vec::new(),
+    };
     loop {
         let field = match multipart.next_field().await {
             Ok(Some(field)) => field,
@@ -209,7 +223,10 @@ pub async fn upload(
             Ok(saved) => outcome.saved.push(saved),
             Err(e) => {
                 warn!(name = %name, error = %e, "upload failed");
-                outcome.failed.push(UploadFailure { name, error: e.to_string() });
+                outcome.failed.push(UploadFailure {
+                    name,
+                    error: e.to_string(),
+                });
                 // Disk-level failures will not get better for the next file.
                 if matches!(e, UploadError::DiskFull | UploadError::TooLarge) {
                     break;

@@ -18,9 +18,7 @@ pub struct Found {
 /// share of `~/Videos` quietly becomes a share of wherever a link points.
 pub fn walk_root(root: &Root, include_hidden: bool, limit: usize) -> Vec<Found> {
     match root.kind {
-        RootKind::File => describe(&root.path, PathBuf::new())
-            .into_iter()
-            .collect(),
+        RootKind::File => describe(&root.path, PathBuf::new()).into_iter().collect(),
         RootKind::Dir => WalkDir::new(&root.path)
             .min_depth(1)
             .max_depth(MAX_DEPTH)

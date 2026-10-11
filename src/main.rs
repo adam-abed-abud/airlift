@@ -1,18 +1,10 @@
-//! LANShare: temporary, PIN-protected file sharing over the local network.
-//!
 //! `main` only parses arguments, sets up logging and hands over to the server.
-//! All interesting behaviour lives in the sibling modules.
-
-mod auth;
-mod cli;
-mod files;
-mod server;
-mod transfer;
-mod utils;
+//! All interesting behaviour lives in the library modules.
 
 use std::net::SocketAddr;
 
 use clap::Parser;
+use lanshare::{auth, cli, files, server, transfer, utils};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -22,9 +14,11 @@ async fn main() -> anyhow::Result<()> {
     let net = cli.command.net().clone();
     let share = match &cli.command {
         cli::Command::Send { file, .. } => files::Share::single_file(file)?,
-        cli::Command::Serve { dirs, include_hidden, .. } => {
-            files::Share::directories(dirs, *include_hidden)?
-        }
+        cli::Command::Serve {
+            dirs,
+            include_hidden,
+            ..
+        } => files::Share::directories(dirs, *include_hidden)?,
     };
     let upload = resolve_upload(&cli.command, &share)?;
     let host = utils::net::advertised_host(net.host.as_deref(), net.bind);
@@ -50,7 +44,11 @@ async fn main() -> anyhow::Result<()> {
     }
     println!("Press Ctrl+C to stop");
 
-    server::run(SocketAddr::new(net.bind, net.port), server::state(auth, share, upload)).await
+    server::run(
+        SocketAddr::new(net.bind, net.port),
+        server::state(auth, share, upload),
+    )
+    .await
 }
 
 /// Turn the upload flags into a config, picking a sensible default
@@ -68,5 +66,8 @@ fn resolve_upload(
         (None, cli::Command::Serve { .. }) => share.roots()[0].path.clone(),
         (None, cli::Command::Send { .. }) => std::env::current_dir()?,
     };
-    Ok(Some(transfer::upload::UploadConfig::new(&dir, opts.max_upload)?))
+    Ok(Some(transfer::upload::UploadConfig::new(
+        &dir,
+        opts.max_upload,
+    )?))
 }

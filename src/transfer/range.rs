@@ -12,7 +12,9 @@ pub struct ByteRange {
 }
 
 impl ByteRange {
-    pub fn len(&self) -> u64 {
+    /// Number of bytes covered. A `ByteRange` is never empty by construction
+    /// (`start <= end`), hence no `is_empty`.
+    pub fn byte_count(&self) -> u64 {
         self.end - self.start + 1
     }
 }
@@ -52,20 +54,27 @@ pub fn parse(header: Option<&str>, size: u64) -> RangeOutcome {
         // `bytes=-500`: the final 500 bytes.
         (true, false) => match end.parse::<u64>() {
             Ok(0) => RangeOutcome::Unsatisfiable,
-            Ok(n) => RangeOutcome::Partial(ByteRange { start: size.saturating_sub(n), end: size - 1 }),
+            Ok(n) => RangeOutcome::Partial(ByteRange {
+                start: size.saturating_sub(n),
+                end: size - 1,
+            }),
             Err(_) => RangeOutcome::Full,
         },
         // `bytes=500-`: from 500 to the end.
         (false, true) => match start.parse::<u64>() {
-            Ok(s) if s < size => RangeOutcome::Partial(ByteRange { start: s, end: size - 1 }),
+            Ok(s) if s < size => RangeOutcome::Partial(ByteRange {
+                start: s,
+                end: size - 1,
+            }),
             Ok(_) => RangeOutcome::Unsatisfiable,
             Err(_) => RangeOutcome::Full,
         },
         // `bytes=500-999`.
         (false, false) => match (start.parse::<u64>(), end.parse::<u64>()) {
-            (Ok(s), Ok(e)) if s <= e && s < size => {
-                RangeOutcome::Partial(ByteRange { start: s, end: e.min(size - 1) })
-            }
+            (Ok(s), Ok(e)) if s <= e && s < size => RangeOutcome::Partial(ByteRange {
+                start: s,
+                end: e.min(size - 1),
+            }),
             (Ok(_), Ok(_)) => RangeOutcome::Unsatisfiable,
             _ => RangeOutcome::Full,
         },

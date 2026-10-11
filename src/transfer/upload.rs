@@ -50,15 +50,19 @@ pub enum UploadError {
 
 impl UploadConfig {
     pub fn new(dir: &Path, max_bytes: u64) -> anyhow::Result<Self> {
-        let dir = dir
-            .canonicalize()
-            .map_err(|e| anyhow::anyhow!("cannot access upload directory {}: {e}", dir.display()))?;
+        let dir = dir.canonicalize().map_err(|e| {
+            anyhow::anyhow!("cannot access upload directory {}: {e}", dir.display())
+        })?;
         if !dir.is_dir() {
             anyhow::bail!("upload destination {} is not a directory", dir.display());
         }
         // Fail at start-up rather than on the first upload from the iPad.
-        let probe = tempfile::Builder::new().prefix(".lanshare-probe-").tempfile_in(&dir)
-            .map_err(|e| anyhow::anyhow!("upload directory {} is not writable: {e}", dir.display()))?;
+        let probe = tempfile::Builder::new()
+            .prefix(".lanshare-probe-")
+            .tempfile_in(&dir)
+            .map_err(|e| {
+                anyhow::anyhow!("upload directory {} is not writable: {e}", dir.display())
+            })?;
         drop(probe);
         Ok(Self { dir, max_bytes })
     }
@@ -112,20 +116,27 @@ impl UploadConfig {
             };
             written += chunk.len() as u64;
             if let Err(e) = out.write_all(&chunk).await {
-                return Err(match e.raw_os_error() {
-                    Some(libc_enospc) if libc_enospc == 28 => UploadError::DiskFull,
+                return Err(match e.kind() {
+                    std::io::ErrorKind::StorageFull => UploadError::DiskFull,
                     _ => UploadError::Write(e.to_string()),
                 });
             }
         }
-        out.flush().await.map_err(|e| UploadError::Write(e.to_string()))?;
+        out.flush()
+            .await
+            .map_err(|e| UploadError::Write(e.to_string()))?;
         // Make sure the bytes are on disk before we claim success.
-        out.sync_all().await.map_err(|e| UploadError::Write(e.to_string()))?;
+        out.sync_all()
+            .await
+            .map_err(|e| UploadError::Write(e.to_string()))?;
         drop(out);
 
         let (final_name, _) = persist_without_overwrite(temp, &self.dir, &name)?;
         info!(name = %final_name, size = written, "upload saved");
-        Ok(Saved { name: final_name, size: written })
+        Ok(Saved {
+            name: final_name,
+            size: written,
+        })
     }
 }
 

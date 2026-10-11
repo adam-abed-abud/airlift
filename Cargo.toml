@@ -3,8 +3,6 @@ name = "lanshare"
 version = "0.1.0"
 edition = "2024"
 description = "Temporary, PIN-protected LAN file sharing from the terminal to any browser"
-license = "MIT"
-repository = ""
 rust-version = "1.85"
 
 [dependencies]
@@ -39,6 +37,11 @@ rust-embed = "8"
 tempfile = "3"
 fs4 = "1"
 thiserror = "2"
+
+[dev-dependencies]
+# Drive the router in-process for integration tests.
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
 
 [profile.release]
 # Small, fast single binary is the point of shipping this in Rust.

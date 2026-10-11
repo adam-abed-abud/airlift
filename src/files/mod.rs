@@ -96,10 +96,20 @@ impl Share {
             .canonicalize()
             .with_context(|| format!("cannot access {}", file.display()))?;
         if !path.is_file() {
-            bail!("{} is not a regular file (use `serve` for directories)", file.display());
+            bail!(
+                "{} is not a regular file (use `serve` for directories)",
+                file.display()
+            );
         }
         let label = file_name(&path);
-        Ok(Self::with_roots(vec![Root { label, path, kind: RootKind::File }], true))
+        Ok(Self::with_roots(
+            vec![Root {
+                label,
+                path,
+                kind: RootKind::File,
+            }],
+            true,
+        ))
     }
 
     /// Share one or more directories.
@@ -110,16 +120,27 @@ impl Share {
                 .canonicalize()
                 .with_context(|| format!("cannot access {}", dir.display()))?;
             if !path.is_dir() {
-                bail!("{} is not a directory (use `send` for a single file)", dir.display());
+                bail!(
+                    "{} is not a directory (use `send` for a single file)",
+                    dir.display()
+                );
             }
-            roots.push(Root { label: file_name(&path), path, kind: RootKind::Dir });
+            roots.push(Root {
+                label: file_name(&path),
+                path,
+                kind: RootKind::Dir,
+            });
         }
         disambiguate_labels(&mut roots);
         Ok(Self::with_roots(roots, include_hidden))
     }
 
     fn with_roots(roots: Vec<Root>, include_hidden: bool) -> Self {
-        Self { roots, ids: Mutex::new(IdRegistry::default()), include_hidden }
+        Self {
+            roots,
+            ids: Mutex::new(IdRegistry::default()),
+            include_hidden,
+        }
     }
 
     pub fn roots(&self) -> &[Root] {
@@ -180,7 +201,11 @@ impl Share {
         }
         let name = file_name(&real);
         let mime = mime_for(&name);
-        Some(ResolvedFile { path: real, name, mime })
+        Some(ResolvedFile {
+            path: real,
+            name,
+            mime,
+        })
     }
 }
 
@@ -249,7 +274,7 @@ mod tests {
         fs::write(&outside, b"o").unwrap();
         std::os::unix::fs::symlink(&outside, dir.join("link.txt")).unwrap();
 
-        let share = Share::directories(&[dir.clone()], false).unwrap();
+        let share = Share::directories(std::slice::from_ref(&dir), false).unwrap();
         let first = share.list();
         let names: Vec<_> = first.iter().map(|e| e.path.as_str()).collect();
         assert_eq!(names, vec!["a.txt", "sub/b.pdf"]);
@@ -265,7 +290,7 @@ mod tests {
     fn resolve_rejects_file_replaced_by_escaping_symlink() {
         let dir = tmp();
         fs::write(dir.join("a.txt"), b"a").unwrap();
-        let share = Share::directories(&[dir.clone()], false).unwrap();
+        let share = Share::directories(std::slice::from_ref(&dir), false).unwrap();
         let id = share.list()[0].id.clone();
         assert!(share.resolve(&id).is_some());
 
