@@ -1,5 +1,6 @@
 //! HTTP server assembly: router, shared state and the run loop.
 
+pub mod assets;
 pub mod error;
 pub mod middleware;
 pub mod routes;
@@ -59,6 +60,8 @@ pub fn router(state: AppState) -> Router {
         ));
 
     Router::new()
+        .route("/", get(assets::index))
+        .route("/{*path}", get(assets::asset))
         .nest("/api", api)
         .layer(SetResponseHeaderLayer::if_not_present(
             header::X_CONTENT_TYPE_OPTIONS,

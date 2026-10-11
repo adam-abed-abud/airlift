@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>LANShare</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="share-name">LANShare</h1>
+    <button id="logout" class="btn btn-quiet" hidden>Log out</button>
+  </header>
+
+  <main>
+    <!-- Login: shown until /api/status reports an authenticated session. -->
+    <section id="view-login" hidden>
+      <form id="login-form" class="card" autocomplete="off">
+        <label for="code">Access code</label>
+        <p class="hint">Shown in the terminal on the computer that is sharing.</p>
+        <!-- inputmode=numeric brings up the number pad on iOS; one-time-code
+             keeps Safari from offering saved passwords. -->
+        <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code"
+               placeholder="482-913" required autofocus>
+        <button type="submit" class="btn btn-primary">Unlock</button>
+        <p id="login-error" class="error" role="alert" hidden></p>
+      </form>
+    </section>
+
+    <!-- Files: the main view. -->
+    <section id="view-files" hidden>
+      <section id="upload-panel" class="card" hidden>
+        <h2>Send to this computer</h2>
+        <!-- A plain file input is what lets iOS offer Photo Library / Files /
+             camera. `multiple` so several photos go in one trip. -->
+        <label class="btn btn-primary file-picker">
+          Choose files…
+          <input id="upload-input" type="file" multiple hidden>
+        </label>
+        <div id="upload-status" hidden>
+          <div class="progress"><div id="upload-bar" class="progress-bar"></div></div>
+          <p id="upload-text" class="hint"></p>
+          <button id="upload-cancel" class="btn btn-quiet">Cancel</button>
+        </div>
+        <p id="upload-result" class="hint" hidden></p>
+      </section>
+
+      <div class="toolbar">
+        <p id="file-count" class="hint"></p>
+        <button id="refresh" class="btn btn-quiet">Refresh</button>
+      </div>
+      <p id="files-error" class="error" role="alert" hidden></p>
+      <ul id="file-list" class="file-list"></ul>
+      <p id="empty" class="hint" hidden>Nothing shared yet.</p>
+    </section>
+  </main>
+
+  <!-- Preview overlay: media plays here via the inline endpoint, which
+       supports range requests so Safari can seek through large videos. -->
+  <div id="preview" class="overlay" hidden>
+    <div class="overlay-bar">
+      <span id="preview-name" class="overlay-title"></span>
+      <a id="preview-download" class="btn btn-primary" download>Download</a>
+      <button id="preview-close" class="btn btn-quiet">Close</button>
+    </div>
+    <div id="preview-body" class="overlay-body"></div>
+  </div>
+
+  <template id="file-item">
+    <li class="file">
+      <div class="file-main">
+        <div class="file-name"></div>
+        <div class="file-meta hint"></div>
+      </div>
+      <div class="file-actions">
+        <button class="btn btn-quiet act-preview" hidden>Preview</button>
+        <button class="btn btn-quiet act-share" hidden>Share…</button>
+        <a class="btn btn-primary act-download" download>Download</a>
+      </div>
+    </li>
+  </template>
+
+  <footer class="hint">
+    Unencrypted HTTP: use only on networks you trust.
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

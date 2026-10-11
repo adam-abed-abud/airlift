@@ -31,6 +31,9 @@ mime_guess = "2"
 tokio-util = { version = "0.7", features = ["io"] }
 percent-encoding = "2"
 httpdate = "1"
+# Frontend files are compiled into the binary in release builds and read
+# from `web/` in debug builds, so UI tweaks need no rebuild while developing.
+rust-embed = "8"
 
 [profile.release]
 # Small, fast single binary is the point of shipping this in Rust.
