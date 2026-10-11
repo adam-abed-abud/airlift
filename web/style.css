@@ -183,6 +183,94 @@ input[type="text"]:focus {
 .segmented .btn:last-child { border-radius: 0 10px 10px 0; margin-left: -1px; }
 .segmented .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
+/* ---------------------------------------------------------- controls --- */
+
+.controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+input[type="search"] {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="search"]:focus { outline: none; border-color: var(--accent); }
+
+select {
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 8px 28px 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%236e6e73' stroke-width='1.8'/%3E%3C/svg%3E") no-repeat right 10px center;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar { display: none; }
+
+.chip {
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chip[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+/* ------------------------------------------------------------ groups --- */
+
+.group-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.group-chevron { color: var(--muted); transition: transform 0.15s; display: inline-block; width: 1em; }
+.group-header[aria-expanded="false"] .group-chevron { transform: rotate(-90deg); }
+.group-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-count { margin-left: auto; font-weight: 400; }
+
+.group-items { list-style: none; margin: 0; padding: 0; }
+
+/* In the grid view the folder header sits in the gutter, the cells go
+   edge to edge. */
+.file-grid-view .group-header { padding: 14px 0 6px; }
+
 /* ------------------------------------------------------------ states --- */
 
 .state {
@@ -211,8 +299,6 @@ input[type="text"]:focus {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* -------------------------------------------------------------- list --- */
-
-.file-list { list-style: none; margin: 0; padding: 0; }
 
 .file {
   padding: 10px 0;
@@ -275,9 +361,7 @@ input[type="text"]:focus {
 
 /* -------------------------------------------------------------- grid --- */
 
-.file-grid {
-  list-style: none;
-  padding: 0;
+.file-grid-view .group-items {
   /* Edge to edge, like a photo app. */
   margin: 0 calc(-1 * var(--gutter));
   display: grid;
@@ -286,7 +370,7 @@ input[type="text"]:focus {
 }
 
 @media (max-width: 520px) {
-  .file-grid { grid-template-columns: repeat(3, 1fr); }
+  .file-grid-view .group-items { grid-template-columns: repeat(3, 1fr); }
 }
 
 .cell-button {

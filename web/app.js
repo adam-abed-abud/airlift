@@ -237,15 +237,82 @@ async function loadFiles() {
   }
 }
 
+// ------------------------------------------------- sort / filter / group ---
+
+/** @typedef {"all" | "photos" | "videos" | "other"} Filter */
+/** @typedef {"name" | "newest" | "largest"} Sort */
+
+/** @type {Filter} */
+let filter = "all";
+/** @type {Sort} */
+let sort = "name";
+let search = "";
+/** Folders the person collapsed; keyed by group label. */
+const collapsed = new Set();
+/** Files currently shown, in display order; the preview steps through these. */
+/** @type {FileEntry[]} */
+let visibleFiles = [];
+let lastTruncated = false;
+
+try {
+  const savedSort = localStorage.getItem("lanshare-sort");
+  if (savedSort === "name" || savedSort === "newest" || savedSort === "largest") sort = savedSort;
+} catch (_) { /* default */ }
+/** @type {HTMLSelectElement} */ ($("sort")).value = sort;
+
+/** @param {FileEntry} f */
+function matchesFilter(f) {
+  switch (filter) {
+    case "photos": return f.mime.startsWith("image/");
+    case "videos": return f.mime.startsWith("video/");
+    case "other": return !f.mime.startsWith("image/") && !f.mime.startsWith("video/");
+    default: return true;
+  }
+}
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/** @param {FileEntry} a @param {FileEntry} b */
+function compare(a, b) {
+  switch (sort) {
+    case "newest": return (b.modified || 0) - (a.modified || 0) || collator.compare(a.name, b.name);
+    case "largest": return b.size - a.size || collator.compare(a.name, b.name);
+    default: return collator.compare(a.name, b.name);
+  }
+}
+
+/**
+ * Folder label for grouping. Top-level files of a single root get the
+ * share name; with several roots the root name is always included so two
+ * folders called "Trip" in different roots stay apart.
+ * @param {FileEntry} f
+ * @param {boolean} multiRoot
+ */
+function folderOf(f, multiRoot) {
+  const dir = f.path.includes("/") ? f.path.slice(0, f.path.lastIndexOf("/")) : "";
+  if (multiRoot) return dir ? `${f.root}/${dir}` : f.root;
+  return dir || f.root;
+}
+
 /** @param {boolean} truncated */
 function renderFiles(truncated) {
-  const list = $("file-list");
-  const grid = $("file-grid");
-  const template = /** @type {HTMLTemplateElement} */ ($("file-item"));
-  const cellTemplate = /** @type {HTMLTemplateElement} */ ($("grid-item"));
-  list.textContent = "";
-  grid.textContent = "";
-  $("empty").hidden = files.length > 0;
+  lastTruncated = truncated;
+  const multiRoot = new Set(files.map((f) => f.root)).size > 1;
+  const needle = search.trim().toLowerCase();
+  visibleFiles = files
+    .filter(matchesFilter)
+    .filter((f) => !needle || f.name.toLowerCase().includes(needle) || f.path.toLowerCase().includes(needle));
+
+  // Group, then order groups by name and files within each by the sort.
+  /** @type {Map<string, FileEntry[]>} */
+  const groups = new Map();
+  for (const f of visibleFiles) {
+    const key = folderOf(f, multiRoot);
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(f); else groups.set(key, [f]);
+  }
+  const groupNames = [...groups.keys()].sort(collator.compare);
+  visibleFiles = groupNames.flatMap((g) => (groups.get(g) || []).sort(compare));
 
   // A folder of photos reads better as a grid; anything else as a list.
   // Only applied until the person picks a view themselves.
@@ -255,49 +322,120 @@ function renderFiles(truncated) {
   } else {
     setView(view);
   }
-  $("file-count").textContent = files.length === 1
-    ? "1 file"
-    : `${files.length} files${truncated ? " (list truncated)" : ""}`;
 
-  const multiRoot = new Set(files.map((f) => f.root)).size > 1;
-  const canShare = typeof navigator.canShare === "function";
+  $("empty").hidden = files.length > 0;
+  $("no-match").hidden = files.length === 0 || visibleFiles.length > 0;
+  const total = files.length === 1 ? "1 file" : `${files.length} files`;
+  const shown = visibleFiles.length !== files.length ? ` · ${visibleFiles.length} shown` : "";
+  $("file-count").textContent = `${total}${shown}${truncated ? " (truncated)" : ""}`;
 
-  for (const file of files) {
-    const node = /** @type {HTMLElement} */ (template.content.firstElementChild?.cloneNode(true));
-    /** @type {HTMLElement} */ (node.querySelector(".file-name")).textContent = file.name;
-    fillThumb(/** @type {HTMLElement} */ (node.querySelector(".file-thumb")), file);
+  const list = $("file-list");
+  const grid = $("file-grid");
+  list.textContent = "";
+  grid.textContent = "";
+  const groupTemplate = /** @type {HTMLTemplateElement} */ ($("group-item"));
+  const single = groupNames.length <= 1;
 
-    const meta = [formatSize(file.size), shortType(file.mime)];
-    const folder = multiRoot ? `${file.root}/${file.path}` : file.path;
-    if (folder !== file.name) meta.push(folder.slice(0, folder.length - file.name.length - 1) || file.root);
-    if (file.modified) meta.push(new Date(file.modified * 1000).toLocaleDateString());
-    /** @type {HTMLElement} */ (node.querySelector(".file-meta")).textContent = meta.join(" · ");
-
-    const download = /** @type {HTMLAnchorElement} */ (node.querySelector(".act-download"));
-    download.href = `/api/files/${encodeURIComponent(file.id)}/download`;
-    download.download = file.name;
-
-    const preview = /** @type {HTMLButtonElement} */ (node.querySelector(".act-preview"));
-    preview.hidden = !file.previewable;
-    preview.addEventListener("click", () => openPreview(file));
-
-    const share = /** @type {HTMLButtonElement} */ (node.querySelector(".act-share"));
-    share.hidden = !(canShare && file.size <= SHARE_SIZE_LIMIT);
-    share.addEventListener("click", () => shareFile(file, share));
-
-    list.appendChild(node);
-
-    const cell = /** @type {HTMLElement} */ (cellTemplate.content.firstElementChild?.cloneNode(true));
-    fillThumb(/** @type {HTMLElement} */ (cell.querySelector(".cell-thumb")), file);
-    cell.classList.toggle("has-thumb", file.thumbnail);
-    /** @type {HTMLElement} */ (cell.querySelector(".cell-name")).textContent = file.name;
-    cell.querySelector(".cell-button")?.addEventListener("click", () => {
-      if (file.previewable) openPreview(file);
-      else download.click();
-    });
-    grid.appendChild(cell);
+  for (const name of groupNames) {
+    const members = groups.get(name) || [];
+    for (const [container, build] of /** @type {[HTMLElement, (f: FileEntry) => HTMLElement][]} */ ([[list, buildRow], [grid, buildCell]])) {
+      const section = /** @type {HTMLElement} */ (groupTemplate.content.firstElementChild?.cloneNode(true));
+      const header = /** @type {HTMLButtonElement} */ (section.querySelector(".group-header"));
+      const items = /** @type {HTMLElement} */ (section.querySelector(".group-items"));
+      header.hidden = single;
+      /** @type {HTMLElement} */ (section.querySelector(".group-name")).textContent = name;
+      /** @type {HTMLElement} */ (section.querySelector(".group-count")).textContent = String(members.length);
+      const open = !collapsed.has(name);
+      header.setAttribute("aria-expanded", String(open));
+      items.hidden = !open;
+      header.addEventListener("click", () => {
+        if (collapsed.has(name)) collapsed.delete(name); else collapsed.add(name);
+        const nowOpen = !collapsed.has(name);
+        header.setAttribute("aria-expanded", String(nowOpen));
+        items.hidden = !nowOpen;
+      });
+      for (const f of members) items.appendChild(build(f));
+      container.appendChild(section);
+    }
   }
 }
+
+/** @param {FileEntry} file */
+function downloadUrl(file) {
+  return `/api/files/${encodeURIComponent(file.id)}/download`;
+}
+
+/** @param {FileEntry} file */
+function buildRow(file) {
+  const template = /** @type {HTMLTemplateElement} */ ($("file-item"));
+  const node = /** @type {HTMLElement} */ (template.content.firstElementChild?.cloneNode(true));
+  /** @type {HTMLElement} */ (node.querySelector(".file-name")).textContent = file.name;
+  fillThumb(/** @type {HTMLElement} */ (node.querySelector(".file-thumb")), file);
+
+  const meta = [formatSize(file.size), shortType(file.mime)];
+  if (file.modified) meta.push(new Date(file.modified * 1000).toLocaleDateString());
+  /** @type {HTMLElement} */ (node.querySelector(".file-meta")).textContent = meta.join(" · ");
+
+  const download = /** @type {HTMLAnchorElement} */ (node.querySelector(".act-download"));
+  download.href = downloadUrl(file);
+  download.download = file.name;
+
+  const preview = /** @type {HTMLButtonElement} */ (node.querySelector(".act-preview"));
+  preview.hidden = !file.previewable;
+  preview.addEventListener("click", () => openPreview(file));
+
+  const share = /** @type {HTMLButtonElement} */ (node.querySelector(".act-share"));
+  share.hidden = !(typeof navigator.canShare === "function" && file.size <= SHARE_SIZE_LIMIT);
+  share.addEventListener("click", () => shareFile(file, share));
+  return node;
+}
+
+/** @param {FileEntry} file */
+function buildCell(file) {
+  const template = /** @type {HTMLTemplateElement} */ ($("grid-item"));
+  const cell = /** @type {HTMLElement} */ (template.content.firstElementChild?.cloneNode(true));
+  fillThumb(/** @type {HTMLElement} */ (cell.querySelector(".cell-thumb")), file);
+  cell.classList.toggle("has-thumb", file.thumbnail);
+  /** @type {HTMLElement} */ (cell.querySelector(".cell-name")).textContent = file.name;
+  cell.querySelector(".cell-button")?.addEventListener("click", () => {
+    if (file.previewable) {
+      openPreview(file);
+    } else {
+      const a = document.createElement("a");
+      a.href = downloadUrl(file);
+      a.download = file.name;
+      a.click();
+    }
+  });
+  return cell;
+}
+
+$("search").addEventListener("input", (e) => {
+  search = /** @type {HTMLInputElement} */ (e.currentTarget).value;
+  renderFiles(lastTruncated);
+});
+
+$("sort").addEventListener("change", (e) => {
+  sort = /** @type {Sort} */ (/** @type {HTMLSelectElement} */ (e.currentTarget).value);
+  try { localStorage.setItem("lanshare-sort", sort); } catch (_) { /* fine */ }
+  renderFiles(lastTruncated);
+});
+
+for (const chip of document.querySelectorAll("#filters .chip")) {
+  chip.addEventListener("click", () => {
+    filter = /** @type {Filter} */ (/** @type {HTMLElement} */ (chip).dataset.filter);
+    for (const c of document.querySelectorAll("#filters .chip")) c.setAttribute("aria-pressed", String(c === chip));
+    renderFiles(lastTruncated);
+  });
+}
+
+$("clear-filters").addEventListener("click", () => {
+  search = "";
+  /** @type {HTMLInputElement} */ ($("search")).value = "";
+  filter = "all";
+  for (const c of document.querySelectorAll("#filters .chip")) c.setAttribute("aria-pressed", String(/** @type {HTMLElement} */ (c).dataset.filter === "all"));
+  renderFiles(lastTruncated);
+});
 
 $("refresh").addEventListener("click", loadFiles);
 

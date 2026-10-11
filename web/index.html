@@ -66,7 +66,27 @@
         </div>
       </div>
 
+      <div class="controls">
+        <input id="search" type="search" placeholder="Search" aria-label="Search files" autocomplete="off">
+        <select id="sort" aria-label="Sort">
+          <option value="name">Name</option>
+          <option value="newest">Newest</option>
+          <option value="largest">Largest</option>
+        </select>
+      </div>
+      <div id="filters" class="chips" role="group" aria-label="Show">
+        <button class="chip" data-filter="all" aria-pressed="true">All</button>
+        <button class="chip" data-filter="photos" aria-pressed="false">Photos</button>
+        <button class="chip" data-filter="videos" aria-pressed="false">Videos</button>
+        <button class="chip" data-filter="other" aria-pressed="false">Other</button>
+      </div>
+
       <p id="files-error" class="error" role="alert" hidden></p>
+
+      <div id="no-match" class="state" hidden>
+        <p>No files match.</p>
+        <button id="clear-filters" class="btn btn-quiet">Show everything</button>
+      </div>
 
       <div id="loading" class="state" hidden>
         <div class="spinner" aria-hidden="true"></div>
@@ -78,8 +98,10 @@
         <p class="hint">Files added on the computer show up after a refresh.</p>
       </div>
 
-      <ul id="file-list" class="file-list"></ul>
-      <ul id="file-grid" class="file-grid" hidden></ul>
+      <!-- Both views are lists of folder groups; a single group renders
+           without its header. -->
+      <div id="file-list" class="file-list"></div>
+      <div id="file-grid" class="file-grid-view" hidden></div>
     </section>
   </main>
 
@@ -93,6 +115,17 @@
     </div>
     <div id="preview-body" class="overlay-body"></div>
   </div>
+
+  <template id="group-item">
+    <section class="group">
+      <button class="group-header" aria-expanded="true">
+        <span class="group-chevron" aria-hidden="true">▾</span>
+        <span class="group-name"></span>
+        <span class="group-count hint"></span>
+      </button>
+      <ul class="group-items"></ul>
+    </section>
+  </template>
 
   <template id="file-item">
     <li class="file">

@@ -15,7 +15,7 @@ struct Web;
 /// Browser-side hardening for the page itself. The app only ever talks to
 /// its own origin, so a strict CSP costs nothing and blocks injected
 /// scripts should a file name ever slip into the DOM unescaped.
-const CSP: &str = "default-src 'self'; img-src 'self' blob:; media-src 'self' blob:; \
+const CSP: &str = "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; \
                    frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'";
 
 pub async fn index() -> Response {
